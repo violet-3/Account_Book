@@ -407,6 +407,26 @@ section { animation: pagein .22s ease; }
   line-height: 1.6;
 }
 
+/* ---------- 今日在岗状态 ---------- */
+.worktime .wt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.worktime .wt > span { color: var(--text-2); font-size: .9rem; }
+.worktime .wt b { color: var(--text); font-size: 1.15rem; font-variant-numeric: tabular-nums; margin-left: 2px; }
+.wt-state {
+  font-size: .8rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 4px 14px;
+  background: var(--bg);
+  color: var(--text-2);
+}
+.wt-state.wt-working { background: rgba(16, 185, 129, .15); color: var(--ok); }
+.wt-state.wt-after { background: var(--brand-weak); color: var(--brand); }
+
 .storage-warn {
   background: rgba(245, 158, 11, .14);
   border: 1px solid rgba(245, 158, 11, .4);

@@ -17,13 +17,18 @@
     if (!DB.saveState(state)) storageOk.value = false;
   }, { deep: true });
 
-  /* 生效设置:合并社保基数模式 */
+  /* 生效设置:合并社保基数模式与排班 */
   const effSettings = computed(() => {
     const s = state.settings;
     const sbBase = s.sbBaseMode === 'salary'
       ? (Number(s.baseSalary) || 0)
       : (Number(s.sbBaseCustom) || 0);
     return { ...s, sbBase };
+  });
+  const schedule = computed(() => C.schedFromSettings(effSettings.value));
+  const cityName = computed(() => {
+    const s = state.settings;
+    return s.city === 'custom' ? (s.customCityName || '自定义') : (CITY[s.city] ? CITY[s.city].name : '自定义');
   });
 
   function applyCity(key) {
@@ -69,8 +74,8 @@
   /* ---------- 日期草稿(今日面板 / 任意日弹层共用) ---------- */
   const draft = reactive({ open: false, date: '', status: 'work', ot: 0, otType: 'auto', note: '' });
 
-  function inferredStatus(date) { return C.effectiveStatus(date, null, H); }
-  function inferredOtType(date) { return C.otTypeOf(date, null, H); }
+  function inferredStatus(date) { return C.effectiveStatus(date, null, H, schedule.value); }
+  function inferredOtType(date) { return C.otTypeOf(date, null, H, schedule.value); }
 
   function loadDraft(date, open = true) {
     const rec = state.records[date];
@@ -128,8 +133,47 @@
 
   /* 今日页本月概览 */
   const now = { y: new Date().getFullYear(), m: new Date().getMonth() + 1 };
-  const thisMonthStat = computed(() => { hver.value; return C.monthStats(now.y, now.m, state.records, H); });
+  const thisMonthStat = computed(() => { hver.value; return C.monthStats(now.y, now.m, state.records, H, schedule.value); });
   const thisMonthPay = computed(() => { hver.value; return C.calcYear(now.y, effSettings.value, state.records, H).months[now.m - 1]; });
+
+  /* 上下班时间与在岗状态(打开页面时快照) */
+  function minutesOf(hhmm) {
+    const [h, m] = String(hhmm || '09:00').split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  }
+  function fmtDur(mins) {
+    mins = Math.max(0, Math.round(mins));
+    const h = Math.floor(mins / 60), m = mins % 60;
+    if (h && m) return `${h} 小时 ${m} 分`;
+    if (h) return `${h} 小时`;
+    return `${m} 分钟`;
+  }
+  const workStatus = computed(() => {
+    const s = effSettings.value;
+    const n = new Date();
+    const cur = n.getHours() * 60 + n.getMinutes();
+    const start = minutesOf(s.workTimeStart);
+    const end = minutesOf(s.workTimeEnd);
+    if (cur < start) return { label: '未上班', cls: 'wt-before', detail: `距上班还有 ${fmtDur(start - cur)}` };
+    if (cur <= end) return { label: '工作中', cls: 'wt-working', detail: `距下班还有 ${fmtDur(end - cur)}` };
+    return { label: '已下班', cls: 'wt-after', detail: draft.ot > 0 ? `今日已记加班 ${draft.ot} 小时,辛苦了` : '今天辛苦了' };
+  });
+
+  /* 大小周:以本周为锚点设置类型,自动交替推算 */
+  function setAnchor(type) {
+    state.settings.anchorType = type;
+    state.settings.anchorWeekStart = C.weekStartOf(todayStr);
+    showToast(type === 'big' ? '已设本周为大周,之后自动交替' : '已设本周为小周,之后自动交替');
+  }
+  const thisWeekendHint = computed(() => {
+    if (state.settings.workType !== 'bigsmall') return '';
+    const ws = C.weekStartOf(todayStr);
+    const [wy, wm, wd] = ws.split('-').map(Number);
+    const sat = C.fmtDate(wy, wm, wd + 6);
+    return C.isScheduledRestDay(sat, schedule.value)
+      ? '本周末休周六、周日,下周自动切换'
+      : '本周为小周仅休周日,下周自动切换';
+  });
 
   /* ---------- 日历页 ---------- */
   const calYear = ref(now.y);
@@ -148,7 +192,7 @@
       const rec = state.records[ds];
       cells.push({
         key: ds, d: dd, inMonth,
-        kind: C.dayKind(ds, H),
+        kind: C.dayKind(ds, H, schedule.value),
         status: rec ? rec.status : '',
         ot: rec ? (Number(rec.ot) || 0) : 0,
         name: globalThis.HOLIDAY_NAMES[ds] || '',
@@ -162,8 +206,9 @@
     }
     return cells;
   });
-  const calStat = computed(() => { hver.value; return C.monthStats(calYear.value, calMonth.value, state.records, H); });
+  const calStat = computed(() => { hver.value; return C.monthStats(calYear.value, calMonth.value, state.records, H, schedule.value); });
   const calOtPay = computed(() => { hver.value; return C.calcYear(calYear.value, effSettings.value, state.records, H).months[calMonth.value - 1].otPay; });
+  const calTimeoff = computed(() => { hver.value; return C.calcYear(calYear.value, effSettings.value, state.records, H).months[calMonth.value - 1].timeoffHours; });
   const calYearHint = computed(() => {
     hver.value;
     const st = globalThis.HolidayUpdater ? globalThis.HolidayUpdater.status(calYear.value) : 'ok';
@@ -269,14 +314,14 @@
       }
       return {
         state, page, toast, showToast, storageOk,
-        effSettings, applyCity,
+        effSettings, applyCity, schedule, cityName,
         STATUS_META, OT_TYPE_LABEL, WEEKDAYS, fmtMoney,
         draft, loadDraft, saveDraft, clearDraft, inferredOtType,
         draftDateLabel, draftKindLabel, siOpen, pay0,
         pensionPct, medicalPct, unemploymentPct,
         todayStr, todayRec, todayKindLabel, todayHolidayName, todayOtType, todayOtRate,
-        thisMonthStat, thisMonthPay, now,
-        calYear, calMonth, calCells, calStat, calOtPay, calShift, calYearHint,
+        thisMonthStat, thisMonthPay, now, workStatus, setAnchor, thisWeekendHint, fmtDur,
+        calYear, calMonth, calCells, calStat, calOtPay, calShift, calYearHint, calTimeoff,
         payYear, payMonth, pay, chartData, chartMax, payShift, percentStr,
         cityList, housingPct,
         doExport, onImportFile, doClear,

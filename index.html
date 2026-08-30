@@ -29,6 +29,15 @@
         <p class="sub">{{ todayStr }} · 今天是{{ todayKindLabel }}<template v-if="todayHolidayName"> · {{ todayHolidayName }}</template></p>
       </header>
 
+      <div class="card worktime">
+        <div class="wt">
+          <span>上班 <b>{{ effSettings.workTimeStart }}</b></span>
+          <span class="wt-state" :class="workStatus.cls">{{ workStatus.label }}</span>
+          <span>下班 <b>{{ effSettings.workTimeEnd }}</b></span>
+        </div>
+        <p class="hint" v-if="workStatus.detail">{{ workStatus.detail }}</p>
+      </div>
+
       <div class="card">
         <div class="card-title">出勤状态</div>
         <div class="chips">
@@ -57,7 +66,10 @@
         <p class="hint" v-if="draft.ot > 0 && effSettings.otComp === 'pay'">
           预计加班费 ¥{{ fmtMoney(draft.ot * pay0.hourlyWage * todayOtRate) }}（时薪 ¥{{ pay0.hourlyWage }} × {{ todayOtRate }} 倍）
         </p>
-        <p class="hint" v-else-if="draft.ot > 0">当前设置为「仅记录加班，不计加班费」，可在设置中修改。</p>
+        <p class="hint" v-else-if="draft.ot > 0 && effSettings.otComp === 'timeoff'">
+          按 {{ todayOtRate }} 倍折算,今日加班可调休 {{ fmtDur(draft.ot * todayOtRate * 60) }}
+        </p>
+        <p class="hint" v-else-if="draft.ot > 0">当前设置为「仅记录加班,不计补偿」,可在设置中修改。</p>
       </div>
 
       <div class="card">
@@ -73,7 +85,7 @@
         <div class="grid4">
           <div class="g4"><b>{{ thisMonthStat.attended }}</b><i>已出勤/天</i></div>
           <div class="g4"><b>{{ thisMonthStat.otTotal }}</b><i>加班/小时</i></div>
-          <div class="g4"><b>¥{{ fmtMoney(thisMonthPay.otPay) }}</b><i>加班费</i></div>
+          <div class="g4"><b v-if="effSettings.otComp === 'timeoff'">{{ thisMonthPay.timeoffHours }}h</b><b v-else>¥{{ fmtMoney(thisMonthPay.otPay) }}</b><i>{{ effSettings.otComp === 'timeoff' ? '可调休' : '加班费' }}</i></div>
           <div class="g4 hl"><b>¥{{ fmtMoney(thisMonthPay.net, true) }}</b><i>预估实发</i></div>
         </div>
       </div>
@@ -124,7 +136,7 @@
           <div class="g4"><b>{{ calStat.attended }}<i class="sub-n">/{{ calStat.workdayCount }}</i></b><i>出勤/应出勤</i></div>
           <div class="g4"><b>{{ calStat.otTotal }}</b><i>加班/小时</i></div>
           <div class="g4"><b>{{ calStat.unpaid }}</b><i>缺勤/天</i></div>
-          <div class="g4 hl"><b>¥{{ fmtMoney(calOtPay) }}</b><i>加班费</i></div>
+          <div class="g4 hl"><b v-if="effSettings.otComp === 'timeoff'">{{ calTimeoff }}h</b><b v-else>¥{{ fmtMoney(calOtPay) }}</b><i>{{ effSettings.otComp === 'timeoff' ? '可调休' : '加班费' }}</i></div>
         </div>
       </div>
     </section>
@@ -156,13 +168,15 @@
         <div class="li" v-if="effSettings.monthlyAllowance > 0">
           <span>固定补贴</span><b>+ ¥{{ fmtMoney(pay.allowance) }}</b>
         </div>
-        <div class="li" :class="{ dim: !effSettings.otComp || effSettings.otComp === 'none' }">
+        <div class="li" :class="{ dim: effSettings.otComp === 'none' }">
           <span>加班费
-            <i class="li-sub" v-if="pay.otPay > 0">
+            <i class="li-sub" v-if="effSettings.otComp === 'timeoff'">按倍率折算调休,不计入应发</i>
+            <i class="li-sub" v-else-if="pay.otPay > 0">
               工作日 {{ pay.otHours.workday }}h / 周末 {{ pay.otHours.weekend }}h / 节假日 {{ pay.otHours.holiday }}h
             </i>
           </span>
-          <b v-if="pay.otPay > 0">+ ¥{{ fmtMoney(pay.otPay) }}</b>
+          <b v-if="effSettings.otComp === 'timeoff'">{{ pay.timeoffHours }} 小时</b>
+          <b v-else-if="pay.otPay > 0">+ ¥{{ fmtMoney(pay.otPay) }}</b>
           <b v-else>¥0</b>
         </div>
         <div class="li" :class="{ dim: pay.deduction === 0 }">
@@ -175,13 +189,15 @@
           <span>应发工资</span><b>¥{{ fmtMoney(pay.gross) }}</b>
         </div>
         <div class="li" @click="siOpen = !siOpen" style="cursor:pointer">
-          <span>五险一金<i class="li-sub">缴费基数 ¥{{ fmtMoney(pay.social.base) }} ▾</i></span>
+          <span>五险一金<i class="li-sub">{{ cityName }} · 缴费基数 ¥{{ fmtMoney(pay.social.base) }} ▾</i></span>
           <b>− ¥{{ fmtMoney(pay.social.total) }}</b>
         </div>
         <template v-if="siOpen">
           <div class="li sub"><span>养老保险 {{ percentStr(pay.social.rates.pension) }}</span><b>¥{{ fmtMoney(pay.social.items.pension) }}</b></div>
           <div class="li sub"><span>医疗保险 {{ percentStr(pay.social.rates.medical) }}</span><b>¥{{ fmtMoney(pay.social.items.medical) }}</b></div>
           <div class="li sub"><span>失业保险 {{ percentStr(pay.social.rates.unemployment) }}</span><b>¥{{ fmtMoney(pay.social.items.unemployment) }}</b></div>
+          <div class="li sub"><span>工伤保险 · 单位全额缴纳</span><b>¥0</b></div>
+          <div class="li sub"><span>生育保险 · 单位全额缴纳</span><b>¥0</b></div>
           <div class="li sub"><span>住房公积金 {{ percentStr(pay.social.rates.housing) }}</span><b>¥{{ fmtMoney(pay.social.items.housing) }}</b></div>
         </template>
         <div class="li">
@@ -241,6 +257,39 @@
             <option v-for="c in cityList" :key="c.k" :value="c.k">{{ c.name }}</option>
           </select>
         </label>
+        <label class="field" v-if="state.settings.city === 'custom'">
+          <span>城市名称</span>
+          <input type="text" v-model="state.settings.customCityName" maxlength="12" placeholder="如:东莞、昆山">
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="card-title">排班与工时</div>
+        <label class="field">
+          <span>工作制</span>
+          <select v-model="state.settings.workType">
+            <option value="two">双休(周六日休)</option>
+            <option value="one">单休(仅周日休)</option>
+            <option value="bigsmall">大小周(单双周交替)</option>
+          </select>
+        </label>
+        <div class="field" v-if="state.settings.workType === 'bigsmall'">
+          <span>本周是</span>
+          <span class="chips small">
+            <button class="chip" :class="{ on: state.settings.anchorType === 'big' }" @click="setAnchor('big')">大周(双休)</button>
+            <button class="chip" :class="{ on: state.settings.anchorType === 'small' }" @click="setAnchor('small')">小周(单休)</button>
+          </span>
+        </div>
+        <p class="hint" v-if="state.settings.workType === 'bigsmall'">{{ thisWeekendHint || '先选择本周是大周还是小周,之后按周自动交替推算。' }}</p>
+        <label class="field">
+          <span>上班时间</span>
+          <input type="time" v-model="state.settings.workTimeStart">
+        </label>
+        <label class="field">
+          <span>下班时间</span>
+          <input type="time" v-model="state.settings.workTimeEnd">
+        </label>
+        <p class="hint">工作制会同步影响日历的应出勤天数、缺勤判定与加班倍率(排班休息日加班按 2 倍)。</p>
       </div>
 
       <div class="card">
@@ -280,11 +329,12 @@
           <span>补偿方式</span>
           <select v-model="state.settings.otComp">
             <option value="pay">按法定倍率折算加班费</option>
-            <option value="none">仅记录,不计加班费</option>
+            <option value="timeoff">调休(按倍率折算可休时长,不发钱)</option>
+            <option value="none">仅记录,不计补偿</option>
           </select>
         </label>
-        <details class="adv" v-if="state.settings.otComp === 'pay'">
-          <summary>自定义倍率</summary>
+        <details class="adv" v-if="state.settings.otComp !== 'none'">
+          <summary>自定义倍率(加班费与调休折算共用)</summary>
           <label class="field"><span>工作日倍率</span><input type="number" step="0.1" min="0" v-model.number="state.settings.otRateWorkday"></label>
           <label class="field"><span>周末倍率</span><input type="number" step="0.1" min="0" v-model.number="state.settings.otRateWeekend"></label>
           <label class="field"><span>法定节假日倍率</span><input type="number" step="0.1" min="0" v-model.number="state.settings.otRateHoliday"></label>

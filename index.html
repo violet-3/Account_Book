@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>打工人账本 · 考勤加班与工资</title>
+  <meta name="description" content="打工人的考勤加班记账本:记录出勤与加班,自动估算五险一金、个税与到手工资。数据保存在本地。">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <main class="content">
+
+    <div class="storage-warn" v-if="!storageOk">
+      ⚠️ 当前环境无法写入本地存储,记录仅保留到关闭页面前。请用 Chrome / Edge / 手机浏览器打开,或部署到静态托管后使用。
+    </div>
+
+    <!-- ============ 今日打卡 ============ -->
+    <section v-show="page==='today'" class="page-today">
+      <header class="page-head">
+        <h1>今日打卡</h1>
+        <p class="sub">{{ todayStr }} · 今天是{{ todayKindLabel }}<template v-if="todayHolidayName"> · {{ todayHolidayName }}</template></p>
+      </header>
+
+      <div class="card">
+        <div class="card-title">出勤状态</div>
+        <div class="chips">
+          <button v-for="(m, k) in STATUS_META" :key="k"
+                  class="chip" :class="{ on: draft.status === k, [m.cls]: draft.status === k }"
+                  @click="draft.status = k">{{ m.label }}</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">今日加班
+          <span class="tag" v-if="draft.ot > 0">{{ OT_TYPE_LABEL[todayOtType] }}</span>
+        </div>
+        <div class="ot-row">
+          <button class="step-btn" @click="draft.ot = Math.max(0, Math.round((draft.ot - 0.5) * 10) / 10)">−</button>
+          <div class="ot-val"><b>{{ draft.ot.toFixed(1) }}</b><i>小时</i></div>
+          <button class="step-btn" @click="draft.ot = Math.round((draft.ot + 0.5) * 10) / 10">＋</button>
+        </div>
+        <div class="chips small">
+          <button class="chip" @click="draft.ot = Math.round((draft.ot + 0.5) * 10) / 10">+0.5h</button>
+          <button class="chip" @click="draft.ot += 1">+1h</button>
+          <button class="chip" @click="draft.ot += 2">+2h</button>
+          <button class="chip" @click="draft.ot += 4">+4h</button>
+          <button class="chip ghost" v-if="draft.ot > 0" @click="draft.ot = 0">清零</button>
+        </div>
+        <p class="hint" v-if="draft.ot > 0 && effSettings.otComp === 'pay'">
+          预计加班费 ¥{{ fmtMoney(draft.ot * pay0.hourlyWage * todayOtRate) }}（时薪 ¥{{ pay0.hourlyWage }} × {{ todayOtRate }} 倍）
+        </p>
+        <p class="hint" v-else-if="draft.ot > 0">当前设置为「仅记录加班，不计加班费」，可在设置中修改。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">备注</div>
+        <textarea class="note" rows="2" maxlength="100" v-model="draft.note"
+                  placeholder="选填:项目、事由等"></textarea>
+      </div>
+
+      <button class="btn primary block" @click="saveDraft()">保存今日记录</button>
+
+      <div class="card overview">
+        <div class="card-title">{{ now.m }}月概览</div>
+        <div class="grid4">
+          <div class="g4"><b>{{ thisMonthStat.attended }}</b><i>已出勤/天</i></div>
+          <div class="g4"><b>{{ thisMonthStat.otTotal }}</b><i>加班/小时</i></div>
+          <div class="g4"><b>¥{{ fmtMoney(thisMonthPay.otPay) }}</b><i>加班费</i></div>
+          <div class="g4 hl"><b>¥{{ fmtMoney(thisMonthPay.net, true) }}</b><i>预估实发</i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 出勤日历 ============ -->
+    <section v-show="page==='calendar'" class="page-calendar">
+      <header class="page-head">
+        <h1>出勤日历</h1>
+      </header>
+
+      <div class="month-nav">
+        <button class="nav-btn" @click="calShift(-1)">‹</button>
+        <b>{{ calYear }}年{{ calMonth }}月</b>
+        <button class="nav-btn" @click="calShift(1)">›</button>
+      </div>
+
+      <div class="card cal">
+        <div class="cal-week">
+          <span v-for="w in WEEKDAYS" :key="w">{{ w }}</span>
+        </div>
+        <div class="cal-grid">
+          <div v-for="c in calCells" :key="c.key"
+               class="cell"
+               :class="[c.inMonth ? '' : 'dim', c.kind, c.status ? 'has-' + c.status : '']"
+               @click="loadDraft(c.key)">
+            <span class="d">{{ c.d }}</span>
+            <span class="mark" v-if="c.kind === 'makeup'">班</span>
+            <span class="hname" v-if="c.name && c.inMonth">{{ c.name }}</span>
+            <span class="otbadge" v-if="c.ot">{{ c.ot }}h</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="lg st-work"></span>出勤
+        <span class="lg st-rest"></span>休息
+        <span class="lg st-leave-paid"></span>带薪假
+        <span class="lg st-leave-unpaid"></span>无薪假
+        <span class="lg st-sick"></span>病假
+        <span class="lg st-absent"></span>旷工
+      </div>
+      <p class="cal-hint" v-if="calYearHint">{{ calYearHint }}</p>
+
+      <div class="card overview">
+        <div class="card-title">{{ calMonth }}月统计</div>
+        <div class="grid4">
+          <div class="g4"><b>{{ calStat.attended }}<i class="sub-n">/{{ calStat.workdayCount }}</i></b><i>出勤/应出勤</i></div>
+          <div class="g4"><b>{{ calStat.otTotal }}</b><i>加班/小时</i></div>
+          <div class="g4"><b>{{ calStat.unpaid }}</b><i>缺勤/天</i></div>
+          <div class="g4 hl"><b>¥{{ fmtMoney(calOtPay) }}</b><i>加班费</i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 工资估算 ============ -->
+    <section v-show="page==='pay'" class="page-pay">
+      <header class="page-head">
+        <h1>工资估算</h1>
+      </header>
+
+      <div class="month-nav">
+        <button class="nav-btn" @click="payShift(-1)">‹</button>
+        <b>{{ payYear }}年{{ payMonth }}月</b>
+        <button class="nav-btn" @click="payShift(1)">›</button>
+      </div>
+
+      <div class="pay-hero card">
+        <p class="ph-label">预估到手</p>
+        <p class="ph-num"><i>¥</i>{{ fmtMoney(pay.net) }}</p>
+        <p class="ph-sub">应发 ¥{{ fmtMoney(pay.gross) }} · 扣五险一金 ¥{{ fmtMoney(pay.social.total) }} · 扣个税 ¥{{ fmtMoney(pay.tax) }}</p>
+        <p class="ph-tag" v-if="!pay.recorded">本月暂无考勤记录,按全勤估算</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">明细</div>
+        <div class="li">
+          <span>月薪基数</span><b>¥{{ fmtMoney(effSettings.baseSalary) }}</b>
+        </div>
+        <div class="li" v-if="effSettings.monthlyAllowance > 0">
+          <span>固定补贴</span><b>+ ¥{{ fmtMoney(pay.allowance) }}</b>
+        </div>
+        <div class="li" :class="{ dim: !effSettings.otComp || effSettings.otComp === 'none' }">
+          <span>加班费
+            <i class="li-sub" v-if="pay.otPay > 0">
+              工作日 {{ pay.otHours.workday }}h / 周末 {{ pay.otHours.weekend }}h / 节假日 {{ pay.otHours.holiday }}h
+            </i>
+          </span>
+          <b v-if="pay.otPay > 0">+ ¥{{ fmtMoney(pay.otPay) }}</b>
+          <b v-else>¥0</b>
+        </div>
+        <div class="li" :class="{ dim: pay.deduction === 0 }">
+          <span>缺勤扣款<i class="li-sub" v-if="pay.unpaid > 0">无薪假/旷工 {{ pay.unpaid }} 天</i></span>
+          <b v-if="pay.deduction > 0">− ¥{{ fmtMoney(pay.deduction) }}</b>
+          <b v-else>¥0</b>
+        </div>
+        <div class="sep"></div>
+        <div class="li total">
+          <span>应发工资</span><b>¥{{ fmtMoney(pay.gross) }}</b>
+        </div>
+        <div class="li" @click="siOpen = !siOpen" style="cursor:pointer">
+          <span>五险一金<i class="li-sub">缴费基数 ¥{{ fmtMoney(pay.social.base) }} ▾</i></span>
+          <b>− ¥{{ fmtMoney(pay.social.total) }}</b>
+        </div>
+        <template v-if="siOpen">
+          <div class="li sub"><span>养老保险 {{ percentStr(pay.social.rates.pension) }}</span><b>¥{{ fmtMoney(pay.social.items.pension) }}</b></div>
+          <div class="li sub"><span>医疗保险 {{ percentStr(pay.social.rates.medical) }}</span><b>¥{{ fmtMoney(pay.social.items.medical) }}</b></div>
+          <div class="li sub"><span>失业保险 {{ percentStr(pay.social.rates.unemployment) }}</span><b>¥{{ fmtMoney(pay.social.items.unemployment) }}</b></div>
+          <div class="li sub"><span>住房公积金 {{ percentStr(pay.social.rates.housing) }}</span><b>¥{{ fmtMoney(pay.social.items.housing) }}</b></div>
+        </template>
+        <div class="li">
+          <span>个人所得税<i class="li-sub">累计应纳税所得额 ¥{{ fmtMoney(pay.cumTaxable) }} · 税率 {{ percentStr(pay.taxRate) }}</i></span>
+          <b>− ¥{{ fmtMoney(pay.tax) }}</b>
+        </div>
+        <div class="sep"></div>
+        <div class="li total hl">
+          <span>实发到手</span><b>¥{{ fmtMoney(pay.net) }}</b>
+        </div>
+      </div>
+
+      <details class="card calc-detail">
+        <summary>计算过程</summary>
+        <div class="cd-body">
+          <p>日薪 = 月薪 ÷ 21.75 = <b>¥{{ fmtMoney(pay.dailyWage) }}</b></p>
+          <p>时薪 = 日薪 ÷ 8 = <b>¥{{ fmtMoney(pay.hourlyWage) }}</b></p>
+          <p>加班费 = 时薪 ×（工作日 {{ pay.otHours.workday }}h × {{ percentStr(effSettings.otRateWorkday) }} + 周末 {{ pay.otHours.weekend }}h × {{ percentStr(effSettings.otRateWeekend) }} + 节假日 {{ pay.otHours.holiday }}h × {{ percentStr(effSettings.otRateHoliday) }}）</p>
+          <p>本月应纳税所得额 = 应发 − 五险一金 − 5000 起征 − 专项附加扣除</p>
+          <p>个税按<b>累计预扣预缴法</b>:年初至本月累计应纳税所得额 ¥{{ fmtMoney(pay.cumTaxable) }},适用税率 {{ percentStr(pay.taxRate) }},减去前几个月已缴。</p>
+        </div>
+      </details>
+
+      <div class="card">
+        <div class="card-title">{{ payYear }}年实发走势</div>
+        <div class="chart">
+          <div class="bar-wrap" v-for="b in chartData" :key="b.label">
+            <span class="bar-val" v-if="b.cur">¥{{ fmtMoney(b.net, true) }}</span>
+            <div class="bar" :class="{ cur: b.cur }" :style="{ height: Math.max(2, b.net / chartMax * 100) + '%' }"></div>
+            <span class="bl">{{ b.label }}</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="disclaim">* 估算结果仅供参考,社保费率与基数上下限为参考值,请以当地当年公布及公司实际缴纳为准。</p>
+    </section>
+
+    <!-- ============ 设置 ============ -->
+    <section v-show="page==='settings'" class="page-settings">
+      <header class="page-head">
+        <h1>设置</h1>
+      </header>
+
+      <div class="card">
+        <div class="card-title">薪资</div>
+        <label class="field">
+          <span>月薪基数(元)</span>
+          <input type="number" v-model.number="state.settings.baseSalary" min="0" step="100">
+        </label>
+        <label class="field">
+          <span>每月固定补贴(元,计税)</span>
+          <input type="number" v-model.number="state.settings.monthlyAllowance" min="0" step="50">
+        </label>
+        <label class="field">
+          <span>工作城市</span>
+          <select v-model="state.settings.city" @change="applyCity(state.settings.city)">
+            <option v-for="c in cityList" :key="c.k" :value="c.k">{{ c.name }}</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="card-title">五险一金(个人部分)</div>
+        <label class="field">
+          <span>缴费基数</span>
+          <select v-model="state.settings.sbBaseMode">
+            <option value="salary">按月薪基数</option>
+            <option value="custom">手动指定</option>
+          </select>
+        </label>
+        <label class="field" v-if="state.settings.sbBaseMode === 'custom'">
+          <span>基数金额(元)</span>
+          <input type="number" v-model.number="state.settings.sbBaseCustom" min="0" step="100">
+        </label>
+        <label class="field">
+          <span>公积金比例(个人)</span>
+          <span class="range-row">
+            <input type="range" min="5" max="12" step="0.5" v-model.number="housingPct">
+            <b>{{ housingPct }}%</b>
+          </span>
+        </label>
+        <details class="adv">
+          <summary>各险种比例与基数上下限(高级)</summary>
+          <label class="field"><span>养老 %</span><input type="number" step="0.1" v-model.number="pensionPct"></label>
+          <label class="field"><span>医疗 %</span><input type="number" step="0.1" v-model.number="medicalPct"></label>
+          <label class="field"><span>失业 %</span><input type="number" step="0.1" v-model.number="unemploymentPct"></label>
+          <label class="field"><span>基数下限(元)</span><input type="number" v-model.number="state.settings.sbFloor" min="0"></label>
+          <label class="field"><span>基数上限(元)</span><input type="number" v-model.number="state.settings.sbCeiling" min="0"></label>
+          <p class="hint">切换城市会自动重置以上参数为该城市参考值(每年约 7 月调整,以当地公布为准)。</p>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="card-title">加班补偿</div>
+        <label class="field">
+          <span>补偿方式</span>
+          <select v-model="state.settings.otComp">
+            <option value="pay">按法定倍率折算加班费</option>
+            <option value="none">仅记录,不计加班费</option>
+          </select>
+        </label>
+        <details class="adv" v-if="state.settings.otComp === 'pay'">
+          <summary>自定义倍率</summary>
+          <label class="field"><span>工作日倍率</span><input type="number" step="0.1" min="0" v-model.number="state.settings.otRateWorkday"></label>
+          <label class="field"><span>周末倍率</span><input type="number" step="0.1" min="0" v-model.number="state.settings.otRateWeekend"></label>
+          <label class="field"><span>法定节假日倍率</span><input type="number" step="0.1" min="0" v-model.number="state.settings.otRateHoliday"></label>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="card-title">个税</div>
+        <label class="field">
+          <span>每月专项附加扣除合计(元)</span>
+          <input type="number" v-model.number="state.settings.specialDeduction" min="0" step="100">
+        </label>
+        <p class="hint">如子女教育、房贷利息、赡养老人、房租等,按每月可扣除总额填写。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">数据</div>
+        <div class="btn-row">
+          <button class="btn" @click="doExport">导出备份</button>
+          <button class="btn" @click="$refs.file.click()">导入备份</button>
+          <input type="file" accept=".json,application/json" ref="file" style="display:none" @change="onImportFile">
+          <button class="btn danger" @click="doClear">清空记录</button>
+        </div>
+        <p class="hint">所有数据仅保存在本设备浏览器中(localStorage),不会上传服务器。换设备或清理浏览器前请先导出备份。</p>
+      </div>
+
+      <p class="disclaim">打工人账本 v1.1 · 纯本地 Web 应用 · 费率参数为参考值;节假日数据依据国务院办公厅通知,内置 2025–2026,其他年份自动在线获取(holiday-cn 开源数据)。</p>
+    </section>
+  </main>
+
+  <!-- 任意日期编辑弹层 -->
+  <div class="mask" v-if="draft.open" @click.self="draft.open = false">
+    <div class="sheet">
+      <div class="sheet-head">
+        <b>{{ draftDateLabel }}</b>
+        <span class="tag">{{ draftKindLabel }}</span>
+      </div>
+      <div class="card-title">出勤状态</div>
+      <div class="chips">
+        <button v-for="(m, k) in STATUS_META" :key="k"
+                class="chip" :class="{ on: draft.status === k, [m.cls]: draft.status === k }"
+                @click="draft.status = k">{{ m.label }}</button>
+      </div>
+      <div class="card-title">加班</div>
+      <div class="ot-row">
+        <button class="step-btn" @click="draft.ot = Math.max(0, Math.round((draft.ot - 0.5) * 10) / 10)">−</button>
+        <div class="ot-val"><b>{{ draft.ot.toFixed(1) }}</b><i>小时</i></div>
+        <button class="step-btn" @click="draft.ot = Math.round((draft.ot + 0.5) * 10) / 10">＋</button>
+      </div>
+      <label class="field" v-if="draft.ot > 0">
+        <span>加班类型</span>
+        <select v-model="draft.otType">
+          <option value="auto">自动判定</option>
+          <option value="workday">工作日倍率</option>
+          <option value="weekend">周末倍率</option>
+          <option value="holiday">法定节假日倍率</option>
+        </select>
+      </label>
+      <textarea class="note" rows="2" maxlength="100" v-model="draft.note" placeholder="备注(选填)"></textarea>
+      <div class="btn-row">
+        <button class="btn danger" @click="clearDraft" v-if="state.records[draft.date]">清除</button>
+        <button class="btn ghost" @click="draft.open = false">取消</button>
+        <button class="btn primary" @click="saveDraft">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <transition name="fade">
+    <div class="toast" v-if="toast">{{ toast }}</div>
+  </transition>
+
+  <nav class="tabbar">
+    <button :class="{ on: page === 'today' }" @click="page = 'today'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
+      <span>今日</span>
+    </button>
+    <button :class="{ on: page === 'calendar' }" @click="page = 'calendar'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      <span>日历</span>
+    </button>
+    <button :class="{ on: page === 'pay' }" @click="page = 'pay'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.3 8.2l2.7 3.4 2.7-3.4M12 11.6V16M9.8 12.8h4.4M9.8 14.6h4.4"/></svg>
+      <span>工资</span>
+    </button>
+    <button :class="{ on: page === 'settings' }" @click="page = 'settings'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h3M13 17h7"/><circle cx="16" cy="7" r="2.4"/><circle cx="10" cy="17" r="2.4"/></svg>
+      <span>设置</span>
+    </button>
+  </nav>
+</div>
+
+<script src="vendor/vue.global.prod.js"></script>
+<script src="js/data.js"></script>
+<script src="js/holiday.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/db.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

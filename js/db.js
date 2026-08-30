@@ -1,0 +1,105 @@
+/* =========================================================
+ * db.js — 本地持久层(localStorage)
+ * 所有数据保存在浏览器本地,不上传任何服务器;
+ * 支持导出/导入 JSON 备份。
+ * ========================================================= */
+(function (root) {
+  'use strict';
+
+  const KEY = 'dagong-ledger-v1';
+
+  const DEFAULT_SETTINGS = {
+    city: 'beijing',
+    baseSalary: 10000,       // 月薪基数
+    monthlyAllowance: 0,     // 每月固定补贴(计税)
+    sbBaseMode: 'salary',    // 社保基数:'salary'按月薪 | 'custom'手动
+    sbBaseCustom: 10000,
+    sbFloor: 6821,           // 缴费基数下限(随城市初始化,可改)
+    sbCeiling: 35283,
+    pensionRate: 0.08,
+    medicalRate: 0.02,
+    unemploymentRate: 0.005,
+    housingRate: 0.12,       // 公积金个人比例
+    otComp: 'pay',           // 加班补偿:'pay'加班费 | 'none'仅记录
+    otRateWorkday: 1.5,
+    otRateWeekend: 2,
+    otRateHoliday: 3,
+    specialDeduction: 0,     // 每月专项附加扣除合计
+  };
+
+  function defaults() {
+    return {
+      version: 1,
+      settings: { ...DEFAULT_SETTINGS },
+      records: {},            // 'YYYY-MM-DD': {status, ot, otType, note}
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  function probeStorage() {
+    try {
+      const k = '__dagong_probe__';
+      localStorage.setItem(k, '1');
+      localStorage.removeItem(k);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const storage = { ok: probeStorage() };
+
+  function loadState() {
+    if (!storage.ok) return defaults();
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return defaults();
+      const data = JSON.parse(raw);
+      return {
+        ...defaults(),
+        ...data,
+        settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+        records: data.records || {},
+      };
+    } catch {
+      console.warn('本地数据读取失败,已重置');
+      return defaults();
+    }
+  }
+
+  function saveState(state) {
+    if (!storage.ok) return false;
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        version: state.version,
+        settings: state.settings,
+        records: state.records,
+        createdAt: state.createdAt,
+        savedAt: new Date().toISOString(),
+      }));
+      return true;
+    } catch (e) {
+      console.warn('本地保存失败', e);
+      return false;
+    }
+  }
+
+  function exportJSON(state) {
+    return JSON.stringify({
+      app: '打工人账本',
+      version: state.version,
+      exportedAt: new Date().toISOString(),
+      settings: state.settings,
+      records: state.records,
+    }, null, 2);
+  }
+
+  function importJSON(text) {
+    const data = JSON.parse(text);
+    if (!data || typeof data !== 'object') throw new Error('文件格式不正确');
+    const records = data.records && typeof data.records === 'object' ? data.records : {};
+    const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+    return { records, settings };
+  }
+
+  root.DB = { KEY, DEFAULT_SETTINGS, defaults, loadState, saveState, exportJSON, importJSON, storage };
+})(typeof window !== 'undefined' ? window : globalThis);

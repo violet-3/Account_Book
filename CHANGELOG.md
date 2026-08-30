@@ -48,6 +48,6 @@
 - PWA:可安装、离线可用,移动优先 + 深色模式
 - 计算引擎 34 项单元测试,零后端依赖,静态文件即可部署
 
-[Unreleased]: https://github.com/YOUR_USERNAME/dagong-ledger/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/YOUR_USERNAME/dagong-ledger/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/YOUR_USERNAME/dagong-ledger/releases/tag/v1.0.0
+[Unreleased]: https://github.com/violet-3/Account_Book/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/violet-3/Account_Book/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/violet-3/Account_Book/releases/tag/v1.0.0

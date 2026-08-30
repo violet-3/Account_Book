@@ -3,7 +3,7 @@
 > 考勤 + 加班 + 工资估算,数据存在自己设备里的记账本。
 > Local-first attendance & overtime tracking with payroll estimation — works on phone, tablet and desktop.
 
-[![CI](https://github.com/YOUR_USERNAME/dagong-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/dagong-ledger/actions/workflows/ci.yml)
+[![CI](https://github.com/violet-3/Account_Book/actions/workflows/ci.yml/badge.svg)](https://github.com/violet-3/Account_Book/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-v1.2.0-4f46e5)](../../releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![No backend](https://img.shields.io/badge/backend-none-blueviolet)](#)

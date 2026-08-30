@@ -16,7 +16,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YOUR_USERNAME/dagong-ledger.git"
+    "url": "git+https://github.com/violet-3/Account_Book.git"
   },
   "scripts": {
     "start": "node server.js",

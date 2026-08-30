@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint & Test
+        run: |
+          npm run lint
+          npm test
+
+      - name: Package static site
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p "dist/dagong-ledger-${VERSION}"
+          cp -r index.html sw.js manifest.webmanifest server.js README.md LICENSE \
+                css js vendor icons "dist/dagong-ledger-${VERSION}/"
+          cd dist
+          zip -qr "dagong-ledger-${VERSION}.zip" "dagong-ledger-${VERSION}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG.md
+          files: dist/*.zip

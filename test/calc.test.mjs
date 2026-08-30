@@ -99,5 +99,41 @@ eq(annualTax(0), 0, '0元不缴税');
 eq(annualTax(36000), 1080, '3万6整=3%档顶');
 eq(annualTax(144000), 11880, '14.4万整=10%档顶');
 
+/* ---- 10. 排班制度:单休 ---- */
+const one = { workType: 'one' };
+is(dayKind('2026-08-15', H, one), 'workday', '单休:周六是工作日');
+is(dayKind('2026-08-16', H, one), 'weekend', '单休:周日休息');
+is(dayKind('2026-08-15', H), 'weekend', '默认(未传sched):双休周六休');
+
+/* ---- 11. 排班制度:大小周自动交替 ---- */
+// 锚点:2026-08-31 那一周(周一)为大周。该周周六=9/5。
+const bs = { workType: 'bigsmall', anchorWeekStart: '2026-08-31', anchorType: 'big' };
+is(dayKind('2026-09-05', H, bs), 'weekend', '大小周:锚点周(大周)周六休息');
+is(dayKind('2026-09-12', H, bs), 'workday', '大小周:下一周(小周)周六上班');
+is(dayKind('2026-09-13', H, bs), 'weekend', '大小周:周日永远休息');
+is(dayKind('2026-09-19', H, bs), 'weekend', '大小周:隔两周回到大周');
+// 小周锚点
+const bs2 = { workType: 'bigsmall', anchorWeekStart: '2026-08-31', anchorType: 'small' };
+is(dayKind('2026-09-05', H, bs2), 'workday', '大小周:小周锚点时本周六上班');
+is(dayKind('2026-09-12', H, bs2), 'weekend', '大小周:小周锚点下周六休息');
+// 无锚点退化为双休
+is(dayKind('2026-09-12', H, { workType: 'bigsmall' }), 'weekend', '大小周未设锚点:退化为双休');
+// 大小周与调休补班优先级:补班日永远上班
+is(dayKind('2026-10-10', H, bs), 'makeup', '大小周:法定调休补班日优先于排班');
+// weekStartOf
+is(calc.weekStartOf('2026-08-30'), '2026-08-24', 'weekStartOf:周日归属本周一(8/24)');
+
+/* ---- 12. 大小周下的工资计算 ---- */
+const bsSettings = { ...s21750, workType: 'bigsmall', anchorWeekStart: '2026-08-31', anchorType: 'big' };
+const ybs = calcYear(2026, bsSettings, {}, H);
+// 2026年9月:平日22天中25号为中秋假 → 21;补班9/20(周日)+1;周六12(小周班)+1;周六26为中秋假
+is(ybs.months[8].workdayCount, 23, '大小周:9月应出勤=21平日+补班周日+小周班周六');
+
+/* ---- 13. 调休折算时长 timeoffHours ---- */
+const toSettings = { ...s21750, otComp: 'timeoff' };
+const yto = calcYear(2026, toSettings, recs, H);
+eq(yto.months[7].timeoffHours, 2 * 1.5 + 2 * 2, '8月调休折算=工作日2h*1.5+周末2h*2=7h');
+eq(yto.months[7].otPay, 0, '调休模式不发加班费');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

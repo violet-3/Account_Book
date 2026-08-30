@@ -26,49 +26,79 @@
   }
 
   /* ---------- 出勤类型判定 ----------
-   * 返回:'holiday' 法定节假 | 'makeup' 调休上班 | 'weekend' 周末 | 'workday' 工作日
+   * 返回:'holiday' 法定节假 | 'makeup' 调休上班 | 'weekend' 排班休息日 | 'workday' 工作日
    * records 中显式覆盖优先于日历推断。
+   * sched(可选):{workType:'two'|'one'|'bigsmall', anchorWeekStart, anchorType:'big'|'small'}
+   *   two=双休 one=单休 bigsmall=大小周(以 anchorWeekStart 那周为锚点,单双周自动交替)
    */
-  function dayKind(dateStr, holidays) {
+  function weekStartOf(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const wd = (new Date(y, m - 1, d).getDay() + 6) % 7; // 周一=0
+    const dt = new Date(y, m - 1, d - wd);
+    return fmtDate(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
+  }
+
+  function isScheduledRestDay(dateStr, sched) {
+    const w = weekdayOf(dateStr);
+    const type = sched && sched.workType ? sched.workType : 'two';
+    if (type === 'one') return w === 0;
+    if (type === 'bigsmall') {
+      if (w === 0) return true;
+      if (w !== 6) return false;
+      const anchorWS = sched && sched.anchorWeekStart;
+      if (!anchorWS) return true; // 未设锚点时退化为双休
+      const diff = Math.round((Date.parse(weekStartOf(dateStr)) - Date.parse(anchorWS)) / 604800000);
+      const isBig = (Math.abs(diff) % 2 === 0) ? sched.anchorType === 'big' : sched.anchorType === 'small';
+      return isBig;
+    }
+    return w === 0 || w === 6; // two(双休,默认)
+  }
+
+  /* 从 settings 提取排班配置(calcYear 内部自动调用) */
+  function schedFromSettings(settings) {
+    if (!settings || !settings.workType || settings.workType === 'two') return null;
+    return { workType: settings.workType, anchorWeekStart: settings.anchorWeekStart || '', anchorType: settings.anchorType || 'big' };
+  }
+
+  function dayKind(dateStr, holidays, sched) {
     const y = Number(dateStr.slice(0, 4));
     const table = holidays[y];
     if (table) {
       if (table.holidays.includes(dateStr)) return 'holiday';
       if (table.makeup.includes(dateStr)) return 'makeup';
     }
-    const w = weekdayOf(dateStr);
-    return (w === 0 || w === 6) ? 'weekend' : 'workday';
+    return isScheduledRestDay(dateStr, sched) ? 'weekend' : 'workday';
   }
 
   /* 记录状态 → 实际计薪口径
    * status: 'work' 出勤 | 'rest' 休息 | 'leave_paid' 带薪假
    *         | 'leave_unpaid' 无薪假 | 'sick' 病假 | 'absent' 旷工
-   * 未记录(null):按日历推断 —— 应上班日视为出勤,休息日视为休息。
+   * 未记录(null):按排班推断 —— 应上班日视为出勤,休息日视为休息。
    */
-  function effectiveStatus(dateStr, rec, holidays) {
+  function effectiveStatus(dateStr, rec, holidays, sched) {
     if (rec && rec.status) return rec.status;
-    const kind = dayKind(dateStr, holidays);
+    const kind = dayKind(dateStr, holidays, sched);
     return (kind === 'workday' || kind === 'makeup') ? 'work' : 'rest';
   }
 
   /* 某天是否算"出勤"(用于出勤天数统计) */
-  function isAttended(dateStr, rec, holidays) {
-    const s = effectiveStatus(dateStr, rec, holidays);
+  function isAttended(dateStr, rec, holidays, sched) {
+    const s = effectiveStatus(dateStr, rec, holidays, sched);
     return s === 'work' || s === 'leave_paid' || s === 'sick';
   }
 
   /* 某天缺勤(扣款)天数 */
-  function unpaidDaysOf(dateStr, rec, holidays) {
-    const s = effectiveStatus(dateStr, rec, holidays);
+  function unpaidDaysOf(dateStr, rec, holidays, sched) {
+    const s = effectiveStatus(dateStr, rec, holidays, sched);
     return (s === 'leave_unpaid' || s === 'absent') ? 1 : 0;
   }
 
-  /* 加班类型:法定节假日 ×3,周末(含被顶掉的休息日) ×2,其余 ×1.5
-   * 用户显式覆盖 rec.otType 时以覆盖为准(如周末来上班处理的是工作日事务,仍按周末 2 倍算)。
+  /* 加班类型:法定节假日 ×3,排班休息日 ×2,其余 ×1.5
+   * 用户显式覆盖 rec.otType 时以覆盖为准。
    */
-  function otTypeOf(dateStr, rec, holidays) {
+  function otTypeOf(dateStr, rec, holidays, sched) {
     if (rec && rec.otType) return rec.otType;
-    const kind = dayKind(dateStr, holidays);
+    const kind = dayKind(dateStr, holidays, sched);
     if (kind === 'holiday') return 'holiday';
     if (kind === 'weekend') return 'weekend';
     return 'workday';
@@ -114,8 +144,8 @@
   function round2(v) { return Math.round(v * 100) / 100; }
 
   /* 计算某年 1-12 月的工资明细(累计预扣法需要从 1 月起逐月累计)。
-   * 无考勤记录的月份按"全勤"估算。
-   * 返回 { months: [ {key, label, ...明细} ], totals }
+   * 无考勤记录的月份按"全勤"估算;排班制度(workType 等)取自 settings。
+   * 返回 { months: [ {key, label, ...明细} ] }
    */
   function calcYear(year, settings, records, holidays) {
     const base = num(settings.baseSalary);
@@ -127,7 +157,9 @@
       weekend: num(settings.otRateWeekend) || 2,
       holiday: num(settings.otRateHoliday) || 3,
     };
-    const otPayEnabled = settings.otComp !== 'none';
+    const otComp = settings.otComp || 'pay';
+    const otPayEnabled = otComp === 'pay';
+    const sched = schedFromSettings(settings);
     const si = socialInsurance(settings);
     const threshold = num(settings.taxThreshold) || 5000;
     const special = num(settings.specialDeduction);
@@ -145,26 +177,25 @@
       for (let d = 1; d <= dim; d++) {
         const ds = fmtDate(year, m, d);
         const rec = records[ds];
-        const kind = dayKind(ds, holidays);
+        const kind = dayKind(ds, holidays, sched);
         if (kind === 'workday' || kind === 'makeup') workdayCount++;
         else restCount++;
         if (rec) recorded = true;
 
-        if (isAttended(ds, rec, holidays)) attended++;
-        unpaid += unpaidDaysOf(ds, rec, holidays);
+        if (isAttended(ds, rec, holidays, sched)) attended++;
+        unpaid += unpaidDaysOf(ds, rec, holidays, sched);
 
         const h = rec ? num(rec.ot) : 0;
         if (h > 0) {
-          const t = otTypeOf(ds, rec, holidays);
+          const t = otTypeOf(ds, rec, holidays, sched);
           otHours[t] += h;
         }
       }
 
-      const otPay = otPayEnabled
-        ? hourly * (otHours.workday * rates.workday
-          + otHours.weekend * rates.weekend
-          + otHours.holiday * rates.holiday)
-        : 0;
+      const otHoursWeighted = otHours.workday * rates.workday
+        + otHours.weekend * rates.weekend
+        + otHours.holiday * rates.holiday;
+      const otPay = otPayEnabled ? hourly * otHoursWeighted : 0;
       const deduction = unpaid * daily;
       const gross = base + allowance + otPay - deduction;
       const taxableThisMonth = gross - si.total - threshold - special;
@@ -181,6 +212,7 @@
         workdayCount, restCount,
         attended, unpaid,
         otHours, otPay: round2(otPay),
+        timeoffHours: round2(otHoursWeighted),
         dailyWage: round2(daily), hourlyWage: round2(hourly),
         deduction: round2(deduction),
         allowance,
@@ -203,17 +235,17 @@
     return 0.45;
   }
 
-  /* 汇总某月统计(今日页/日历页用,不涉及钱的部分单独提供) */
-  function monthStats(year, month, records, holidays) {
+  /* 汇总某月统计(今日页/日历页用,sched 为可选排班配置) */
+  function monthStats(year, month, records, holidays, sched) {
     const dim = daysInMonth(year, month);
     let attended = 0, otTotal = 0, otDays = 0, unpaid = 0, workdayCount = 0;
     for (let d = 1; d <= dim; d++) {
       const ds = fmtDate(year, month, d);
       const rec = records[ds];
-      const kind = dayKind(ds, holidays);
+      const kind = dayKind(ds, holidays, sched);
       if (kind === 'workday' || kind === 'makeup') workdayCount++;
-      if (isAttended(ds, rec, holidays)) attended++;
-      unpaid += unpaidDaysOf(ds, rec, holidays);
+      if (isAttended(ds, rec, holidays, sched)) attended++;
+      unpaid += unpaidDaysOf(ds, rec, holidays, sched);
       const h = rec ? num(rec.ot) : 0;
       if (h > 0) { otTotal += h; otDays++; }
     }
@@ -221,7 +253,8 @@
   }
 
   const CALC = {
-    PAY_DAYS_PER_MONTH, fmtDate, daysInMonth, weekdayOf, dayKind,
+    PAY_DAYS_PER_MONTH, fmtDate, daysInMonth, weekdayOf, dayKind, weekStartOf,
+    isScheduledRestDay, schedFromSettings,
     effectiveStatus, isAttended, unpaidDaysOf, otTypeOf,
     socialInsurance, annualTax, calcYear, monthStats, taxRateOf,
     round2, num,

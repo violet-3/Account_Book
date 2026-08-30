@@ -10,8 +10,14 @@
 
   const DEFAULT_SETTINGS = {
     city: 'beijing',
+    customCityName: '',      // 自定义城市名称
     baseSalary: 10000,       // 月薪基数
     monthlyAllowance: 0,     // 每月固定补贴(计税)
+    workTimeStart: '09:00',  // 上班时间
+    workTimeEnd: '18:00',    // 下班时间
+    workType: 'two',         // 排班:two 双休 | one 单休 | bigsmall 大小周
+    anchorWeekStart: '',     // 大小周锚点:某周的周一(YYYY-MM-DD)
+    anchorType: 'big',       // 锚点周类型:big 大周(双休) | small 小周(单休)
     sbBaseMode: 'salary',    // 社保基数:'salary'按月薪 | 'custom'手动
     sbBaseCustom: 10000,
     sbFloor: 6821,           // 缴费基数下限(随城市初始化,可改)
@@ -20,7 +26,7 @@
     medicalRate: 0.02,
     unemploymentRate: 0.005,
     housingRate: 0.12,       // 公积金个人比例
-    otComp: 'pay',           // 加班补偿:'pay'加班费 | 'none'仅记录
+    otComp: 'pay',           // 加班补偿:'pay'加班费 | 'timeoff'调休折算 | 'none'仅记录
     otRateWorkday: 1.5,
     otRateWeekend: 2,
     otRateHoliday: 3,

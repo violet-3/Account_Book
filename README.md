@@ -4,7 +4,7 @@
 > Local-first attendance & overtime tracking with payroll estimation — works on phone, tablet and desktop.
 
 [![CI](https://github.com/violet-3/Account_Book/actions/workflows/ci.yml/badge.svg)](https://github.com/violet-3/Account_Book/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.2.0-4f46e5)](../../releases)
+[![Release](https://img.shields.io/badge/release-v1.3.0-4f46e5)](../../releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![No backend](https://img.shields.io/badge/backend-none-blueviolet)](#)
 ![Node](https://img.shields.io/badge/node-%E2%89%A518-brightgreen)
@@ -28,6 +28,7 @@
 - **出勤日历**:月视图状态着色 + 加班角标,点任意日期弹层编辑;节假日数据**按年自动更新**(内置 2025–2026,其他年份自动在线获取并缓存,离线优雅降级)
 - **工资估算**:加班费(倍率可改)、缺勤扣款、五险一金(内置 16 城个人比例与基数上下限,可改)、个税**累计预扣预缴法**(5000 起征,支持专项附加扣除),工资条式明细 + 全年实发走势图
 - **加班补偿**:加班费 / **调休折算**(累计可休时长) / 仅记录,三种模式
+- **攒钱规划**:储蓄目标(旅行、恋爱基金、应急备用金、买房首付等 12 个模板)+ 存款流水 + 年度储蓄预估(计划口径与实际速度双口径),预计达成年月一目了然
 - **数据自主**:100% 存本地浏览器,不注册不上传;JSON 导出 / 导入备份
 - **三端适配**:手机 / 平板 / 桌面响应式布局,深色模式跟随系统
 

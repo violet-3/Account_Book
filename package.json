@@ -1,6 +1,6 @@
 {
   "name": "dagong-ledger",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "打工人账本 — 考勤加班记账与工资估算的本地优先 Web 应用 / Local-first attendance, overtime & payroll estimator for workers",
   "keywords": [
     "attendance",
@@ -20,7 +20,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node test/calc.test.mjs && node test/holiday.test.mjs",
+    "test": "node test/calc.test.mjs && node test/holiday.test.mjs && node test/savings.test.mjs",
     "lint": "eslint .",
     "bench": "node test/bench.mjs"
   },

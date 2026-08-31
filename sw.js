@@ -1,5 +1,5 @@
 /* sw.js — 离线缓存:network-first(保证更新及时),离线时回退缓存 */
-const CACHE = 'dagong-ledger-v3';
+const CACHE = 'dagong-ledger-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './js/data.js',
   './js/holiday.js',
   './js/calc.js',
+  './js/savings.js',
   './js/db.js',
   './js/app.js',
   './vendor/vue.global.prod.js',

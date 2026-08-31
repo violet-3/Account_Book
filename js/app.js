@@ -8,6 +8,7 @@
   const H = globalThis.HOLIDAYS;
   const CITY = globalThis.CITY_DATA;
   const C = globalThis.CALC;
+  const SAVINGS = globalThis.SAVINGS;
 
   /* ---------- 状态 ---------- */
   const state = reactive(DB.loadState());
@@ -238,6 +239,91 @@
   }
   const percentStr = r => `${Math.round((Number(r) || 0) * 10000) / 100}%`;
 
+  /* ---------- 攒钱页(储蓄目标与存款流水) ---------- */
+  const GOAL_TEMPLATES = [
+    { icon: '✈️', name: '旅行基金' },
+    { icon: '💕', name: '恋爱基金' },
+    { icon: '🛟', name: '应急备用金' },
+    { icon: '🏠', name: '买房首付' },
+    { icon: '🚗', name: '买车基金' },
+    { icon: '💻', name: '数码心愿' },
+    { icon: '💍', name: '婚礼基金' },
+    { icon: '📚', name: '学习提升' },
+    { icon: '🏋️', name: '健身变美' },
+    { icon: '🐱', name: '宠物基金' },
+    { icon: '🧧', name: '孝亲红包' },
+    { icon: '🎁', name: '心愿清单' },
+  ];
+  const savYear = computed(() =>
+    SAVINGS.yearProjection(effSettings.value, state.savings.goals, state.savings.deposits, todayStr.slice(0, 7)));
+  const goalCards = computed(() => state.savings.goals
+    .map(g => ({
+      ...g,
+      ...SAVINGS.goalProgress(g, state.savings.deposits),
+      deposits: state.savings.deposits
+        .filter(d => d.goalId === g.id)
+        .sort((a, b) => String(b.date).localeCompare(String(a.date))),
+    }))
+    .sort((a, b) => ((a.pct >= 100 ? 1 : 0) - (b.pct >= 100 ? 1 : 0)) || (b.pct - a.pct)));
+  const expandedGoal = ref('');
+
+  const goalDraft = reactive({ open: false, editId: '', name: '', icon: '✈️', target: 20000, monthlyPlan: 1000 });
+  function openGoalEditor(g) {
+    if (g) Object.assign(goalDraft, { open: true, editId: g.id, name: g.name, icon: g.icon, target: g.target, monthlyPlan: g.monthlyPlan || '' });
+    else Object.assign(goalDraft, { open: true, editId: '', name: '', icon: '✈️', target: 20000, monthlyPlan: 1000 });
+  }
+  function applyTemplate(t) { goalDraft.name = t.name; goalDraft.icon = t.icon; }
+  function saveGoal() {
+    const name = (goalDraft.name || '').trim();
+    if (!name) { showToast('先给目标起个名字'); return; }
+    const target = Number(goalDraft.target) || 0;
+    if (target <= 0) { showToast('目标金额要大于 0'); return; }
+    const fields = { name, icon: goalDraft.icon, target, monthlyPlan: Number(goalDraft.monthlyPlan) || 0 };
+    if (goalDraft.editId) {
+      const g = state.savings.goals.find(x => x.id === goalDraft.editId);
+      if (g) Object.assign(g, fields);
+      showToast('目标已更新');
+    } else {
+      state.savings.goals.push({ id: 'g' + Date.now().toString(36), createdAt: new Date().toISOString(), ...fields });
+      showToast('目标已创建,开始攒!');
+    }
+    goalDraft.open = false;
+  }
+  function deleteGoal(id) {
+    const g = state.savings.goals.find(x => x.id === id);
+    const n = state.savings.deposits.filter(d => d.goalId === id).length;
+    if (!confirm(`删除目标「${g ? g.name : ''}」?${n ? `其 ${n} 笔存款记录将一并删除。` : ''}`)) return;
+    state.savings.goals = state.savings.goals.filter(x => x.id !== id);
+    state.savings.deposits = state.savings.deposits.filter(d => d.goalId !== id);
+    if (expandedGoal.value === id) expandedGoal.value = '';
+    showToast('目标已删除');
+  }
+
+  const depDraft = reactive({ open: false, goalId: '', amount: 500, date: todayStr, note: '' });
+  function openDeposit(goalId) {
+    if (!state.savings.goals.length) { showToast('先创建一个储蓄目标'); openGoalEditor(); return; }
+    const gid = goalId || (state.savings.goals[0] && state.savings.goals[0].id) || '';
+    Object.assign(depDraft, { open: true, goalId: gid, amount: 500, date: todayStr, note: '' });
+  }
+  function saveDeposit() {
+    const amount = Number(depDraft.amount);
+    if (!depDraft.goalId) { showToast('选择一个目标'); return; }
+    if (!(amount > 0)) { showToast('金额要大于 0'); return; }
+    state.savings.deposits.push({
+      id: 'd' + Date.now().toString(36),
+      goalId: depDraft.goalId,
+      amount: Math.round(amount * 100) / 100,
+      date: depDraft.date || todayStr,
+      note: (depDraft.note || '').trim(),
+    });
+    depDraft.open = false;
+    showToast('存入成功,离目标又近一步!');
+  }
+  function deleteDeposit(id) {
+    state.savings.deposits = state.savings.deposits.filter(d => d.id !== id);
+    showToast('已删除该笔存款');
+  }
+
   /* ---------- 设置页 / 数据管理 ---------- */
   const siOpen = ref(false);
   const pay0 = thisMonthPay; // 今日页加班费预估用当月时薪
@@ -321,6 +407,9 @@
         pensionPct, medicalPct, unemploymentPct,
         todayStr, todayRec, todayKindLabel, todayHolidayName, todayOtType, todayOtRate,
         thisMonthStat, thisMonthPay, now, workStatus, setAnchor, thisWeekendHint, fmtDur,
+        GOAL_TEMPLATES, savYear, goalCards, expandedGoal,
+        goalDraft, openGoalEditor, applyTemplate, saveGoal, deleteGoal,
+        depDraft, openDeposit, saveDeposit, deleteDeposit,
         calYear, calMonth, calCells, calStat, calOtPay, calShift, calYearHint, calTimeoff,
         payYear, payMonth, pay, chartData, chartMax, payShift, percentStr,
         cityList, housingPct,

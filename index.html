@@ -363,6 +363,70 @@
 
       <p class="disclaim">打工人账本 v1.1 · 纯本地 Web 应用 · 费率参数为参考值;节假日数据依据国务院办公厅通知,内置 2025–2026,其他年份自动在线获取(holiday-cn 开源数据)。</p>
     </section>
+    <!-- ============ 攒钱 ============ -->
+    <section v-show="page==='save'" class="page-save">
+      <header class="page-head">
+        <h1>攒钱</h1>
+        <p class="sub">目标账户法:专款专用,一点点攒下想要的</p>
+      </header>
+
+      <div class="pay-hero sav-hero">
+        <p class="ph-label">今年已攒</p>
+        <p class="ph-num"><i>¥</i>{{ fmtMoney(savYear.savedThisYear) }}</p>
+        <p class="ph-sub" v-if="savYear.planMonthly > 0">按每月计划 ¥{{ fmtMoney(savYear.planMonthly, true) }} 全年可攒 ¥{{ fmtMoney(savYear.planYearly, true) }} · 按近 3 月速度预计 ¥{{ fmtMoney(savYear.actualYearly, true) }}</p>
+        <p class="ph-sub" v-else-if="savYear.avgMonthly > 0">近 3 月月均存 ¥{{ fmtMoney(savYear.avgMonthly) }} · 预计全年 ¥{{ fmtMoney(savYear.actualYearly, true) }}<br>给目标设个"每月计划",预估更准</p>
+        <p class="ph-sub" v-else>记下每一笔存款,这里会告诉你一年能攒多少</p>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn primary" @click="openDeposit()">记一笔存款</button>
+        <button class="btn" @click="openGoalEditor()">新建目标</button>
+      </div>
+
+      <div class="card goal-card" v-for="g in goalCards" :key="g.id">
+        <div class="goal-head" @click="expandedGoal = expandedGoal === g.id ? '' : g.id">
+          <span class="goal-icon">{{ g.icon }}</span>
+          <div class="goal-info">
+            <b>{{ g.name }}<i v-if="g.pct >= 100"> 🎉</i></b>
+            <span class="goal-num">¥{{ fmtMoney(g.saved) }} <i>/ ¥{{ fmtMoney(g.target) }}</i></span>
+          </div>
+          <span class="goal-pct">{{ g.pct }}%</span>
+        </div>
+        <div class="prog"><i :style="{ width: g.pct + '%' }"></i></div>
+        <p class="hint" v-if="g.etaMonth === '已达成'">目标达成,犒劳一下自己吧!</p>
+        <p class="hint" v-else-if="g.monthlyPlan > 0">每月计划存 ¥{{ fmtMoney(g.monthlyPlan, true) }}<template v-if="g.etaMonth"> · 预计 {{ g.etaMonth }} 达成</template></p>
+        <p class="hint" v-else>还差 ¥{{ fmtMoney(g.remain) }},设个每月计划更容易坚持</p>
+
+        <template v-if="expandedGoal === g.id">
+          <div class="dep-list">
+            <div class="dep-item" v-for="d in g.deposits.slice(0, 8)" :key="d.id">
+              <span class="dep-date">{{ d.date }}</span>
+              <span class="dep-note">{{ d.note || '存款' }}</span>
+              <b>+¥{{ fmtMoney(d.amount) }}</b>
+              <button class="dep-del" @click="deleteDeposit(d.id)">×</button>
+            </div>
+            <p class="hint" v-if="!g.deposits.length">还没有存款记录</p>
+            <p class="hint" v-if="g.deposits.length > 8">仅显示最近 8 笔</p>
+          </div>
+          <div class="btn-row">
+            <button class="btn" @click="openDeposit(g.id)">存一笔</button>
+            <button class="btn" @click="openGoalEditor(g)">编辑</button>
+            <button class="btn danger" @click="deleteGoal(g.id)">删除</button>
+          </div>
+        </template>
+      </div>
+
+      <p class="hint empty-tip" v-if="!state.savings.goals.length">
+        还没有储蓄目标。旅行、恋爱基金、应急备用金、买房首付…先从一个小目标开始 💪
+      </p>
+
+      <div class="card tips-card">
+        <div class="card-title">攒钱小知识</div>
+        <p class="hint">· 目标账户法:为每个目标单独立户,专款专用,不动用就不心疼。</p>
+        <p class="hint">· 52 周阶梯存钱法:每周比上周多存 10 元,一年可攒下 13,780 元。</p>
+        <p class="hint">· 应急备用金建议存够 3–6 个月生活费,这是打工人的底气。</p>
+      </div>
+    </section>
   </main>
 
   <!-- 任意日期编辑弹层 -->
@@ -402,6 +466,62 @@
     </div>
   </div>
 
+  <!-- 新建/编辑目标弹层 -->
+  <div class="mask" v-if="goalDraft.open" @click.self="goalDraft.open = false">
+    <div class="sheet">
+      <div class="sheet-head"><b>{{ goalDraft.editId ? '编辑目标' : '新建目标' }}</b></div>
+      <div class="card-title">挑一个(点图标一键填好名称)</div>
+      <div class="chips small icon-chips">
+        <button class="chip" :class="{ on: goalDraft.icon === t.icon && goalDraft.name === t.name }"
+                v-for="t in GOAL_TEMPLATES" :key="t.icon" @click="applyTemplate(t)">{{ t.icon }} {{ t.name }}</button>
+      </div>
+      <label class="field">
+        <span>目标名称</span>
+        <input type="text" v-model="goalDraft.name" maxlength="12" placeholder="如:日本旅行">
+      </label>
+      <label class="field">
+        <span>目标金额(元)</span>
+        <input type="number" v-model.number="goalDraft.target" min="1" step="100">
+      </label>
+      <label class="field">
+        <span>每月计划存(元)</span>
+        <input type="number" v-model.number="goalDraft.monthlyPlan" min="0" step="100">
+      </label>
+      <div class="btn-row">
+        <button class="btn ghost" @click="goalDraft.open = false">取消</button>
+        <button class="btn primary" @click="saveGoal">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 存款弹层 -->
+  <div class="mask" v-if="depDraft.open" @click.self="depDraft.open = false">
+    <div class="sheet">
+      <div class="sheet-head"><b>记一笔存款</b></div>
+      <div class="card-title">存入目标</div>
+      <div class="chips small">
+        <button class="chip" :class="{ on: depDraft.goalId === g.id }"
+                v-for="g in state.savings.goals" :key="g.id" @click="depDraft.goalId = g.id">{{ g.icon }} {{ g.name }}</button>
+      </div>
+      <label class="field">
+        <span>金额(元)</span>
+        <input type="number" v-model.number="depDraft.amount" min="1" step="100">
+      </label>
+      <label class="field">
+        <span>日期</span>
+        <input type="date" v-model="depDraft.date">
+      </label>
+      <label class="field">
+        <span>备注</span>
+        <input type="text" v-model="depDraft.note" maxlength="30" placeholder="选填,如:发工资啦">
+      </label>
+      <div class="btn-row">
+        <button class="btn ghost" @click="depDraft.open = false">取消</button>
+        <button class="btn primary" @click="saveDeposit">存入</button>
+      </div>
+    </div>
+  </div>
+
   <transition name="fade">
     <div class="toast" v-if="toast">{{ toast }}</div>
   </transition>
@@ -419,6 +539,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.3 8.2l2.7 3.4 2.7-3.4M12 11.6V16M9.8 12.8h4.4M9.8 14.6h4.4"/></svg>
       <span>工资</span>
     </button>
+    <button :class="{ on: page === 'save' }" @click="page = 'save'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 4h11l-2.5 4L17 12H6"/><path d="M6 12h6"/></svg>
+      <span>攒钱</span>
+    </button>
     <button :class="{ on: page === 'settings' }" @click="page = 'settings'">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h3M13 17h7"/><circle cx="16" cy="7" r="2.4"/><circle cx="10" cy="17" r="2.4"/></svg>
       <span>设置</span>
@@ -430,6 +554,7 @@
 <script src="js/data.js"></script>
 <script src="js/holiday.js"></script>
 <script src="js/calc.js"></script>
+<script src="js/savings.js"></script>
 <script src="js/db.js"></script>
 <script src="js/app.js"></script>
 </body>

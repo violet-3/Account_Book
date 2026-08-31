@@ -427,6 +427,65 @@ section { animation: pagein .22s ease; }
 .wt-state.wt-working { background: rgba(16, 185, 129, .15); color: var(--ok); }
 .wt-state.wt-after { background: var(--brand-weak); color: var(--brand); }
 
+/* ---------- 攒钱页 ---------- */
+.sav-hero .ph-sub { line-height: 1.8; }
+.goal-card .goal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.goal-icon {
+  font-size: 1.5rem;
+  width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+.goal-info { flex: 1; min-width: 0; }
+.goal-info b { display: block; font-size: .95rem; }
+.goal-info b i { font-style: normal; }
+.goal-num { color: var(--text-2); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.goal-num i { font-style: normal; color: var(--text-3); }
+.goal-pct { font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; }
+.prog {
+  height: 8px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 12px 0 4px;
+}
+.prog i { display: block; height: 100%; background: var(--brand-grad); border-radius: 999px; transition: width .3s ease; }
+.dep-list { margin-top: 10px; border-top: 1px solid var(--line); }
+.dep-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: .82rem;
+}
+.dep-item:last-of-type { border-bottom: none; }
+.dep-date { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.dep-note { flex: 1; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dep-item b { color: var(--ok); font-variant-numeric: tabular-nums; }
+.dep-del {
+  border: none; background: none;
+  color: var(--text-3);
+  font-size: 1.05rem;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.icon-chips .chip { padding: 5px 10px; font-size: .78rem; }
+.empty-tip { text-align: center; padding: 8px 12px 4px; }
+.tips-card .hint { padding: 2px 0; }
+
+@media (min-width: 1024px) {
+  .page-save > .btn-row, .page-save > .tips-card, .page-save > .sav-hero { grid-column: 1 / -1; }
+  .page-save > .goal-card { grid-column: auto; }
+}
+
 .storage-warn {
   background: rgba(245, 158, 11, .14);
   border: 1px solid rgba(245, 158, 11, .4);

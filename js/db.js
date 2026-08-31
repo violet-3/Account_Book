@@ -38,6 +38,7 @@
       version: 1,
       settings: { ...DEFAULT_SETTINGS },
       records: {},            // 'YYYY-MM-DD': {status, ot, otType, note}
+      savings: { goals: [], deposits: [] }, // 储蓄目标与存款流水
       createdAt: new Date().toISOString(),
     };
   }
@@ -65,6 +66,10 @@
         ...data,
         settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
         records: data.records || {},
+        savings: {
+          goals: (data.savings && data.savings.goals) || [],
+          deposits: (data.savings && data.savings.deposits) || [],
+        },
       };
     } catch {
       console.warn('本地数据读取失败,已重置');
@@ -79,6 +84,7 @@
         version: state.version,
         settings: state.settings,
         records: state.records,
+        savings: state.savings,
         createdAt: state.createdAt,
         savedAt: new Date().toISOString(),
       }));
@@ -96,6 +102,7 @@
       exportedAt: new Date().toISOString(),
       settings: state.settings,
       records: state.records,
+      savings: state.savings,
     }, null, 2);
   }
 
@@ -104,7 +111,11 @@
     if (!data || typeof data !== 'object') throw new Error('文件格式不正确');
     const records = data.records && typeof data.records === 'object' ? data.records : {};
     const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
-    return { records, settings };
+    const savings = {
+      goals: (data.savings && data.savings.goals) || [],
+      deposits: (data.savings && data.savings.deposits) || [],
+    };
+    return { records, settings, savings };
   }
 
   root.DB = { KEY, DEFAULT_SETTINGS, defaults, loadState, saveState, exportJSON, importJSON, storage };

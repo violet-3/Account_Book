@@ -557,5 +557,14 @@
 <script src="js/savings.js"></script>
 <script src="js/db.js"></script>
 <script src="js/app.js"></script>
+<script>
+  /* PWA 离线缓存注册:file:// 直开时不注册 */
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* 注册失败不影响使用 */ });
+    });
+  }
+</script>
 </body>
 </html>
+

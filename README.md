@@ -21,6 +21,26 @@
 
 ---
 
+## 一键部署 · One-click Deploy
+
+把仓库部署成**你自己的**离线记账本:数据 100% 存在你使用的那台设备浏览器里,不同设备互不相通。
+
+<p>
+  <a href="https://app.netlify.com/start/deploy?repository=https://github.com/violet-3/Account_Book">
+    <img src="https://www.netlify.com/img/deploy/button.svg" alt="Deploy to Netlify" height="32">
+  </a>
+  &nbsp;
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fviolet-3%2FAccount_Book&project-name=dagong-ledger">
+    <img src="https://vercel.com/button" alt="Deploy with Vercel" height="32">
+  </a>
+</p>
+
+- **Netlify / Vercel**:点按钮 → 授权 → 自动建站 → 得到专属网址;手机浏览器打开 → 「添加到主屏幕」→ 离线记账 App ✅(仓库每次更新,站点自动同步)
+- **GitHub Pages**:本仓库已内置 Pages 工作流,推送 main 自动发布到 `https://violet-3.github.io/Account_Book/`(首次需在 Settings → Pages 把 Source 设为 **GitHub Actions**)
+- **本地运行**:`git clone` 后 `node server.js`,或直接双击 `index.html`(离线,无 PWA 安装能力)
+
+---
+
 ## 功能特性
 
 - **今日打卡**:出勤状态(出勤 / 休息 / 带薪假 / 无薪假 / 病假 / 旷工)+ 加班时长一键记录;显示在岗状态与下班倒计时;自动识别工作日、周末、法定节假日、调休日,自动匹配 1.5× / 2× / 3× 加班倍率

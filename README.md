@@ -51,6 +51,7 @@
 - **攒钱规划**:储蓄目标(旅行、恋爱基金、应急备用金、买房首付等 12 个模板)+ 存款流水 + 年度储蓄预估(计划口径与实际速度双口径),预计达成年月一目了然
 - **数据自主**:100% 存本地浏览器,不注册不上传;JSON 导出 / 导入备份
 - **三端适配**:手机 / 平板 / 桌面响应式布局,深色模式跟随系统
+- **Excel 兼容导出**:可在设置中导出 UTF-8 CSV,使用 Excel 直接打开或另存为 `.xlsx`
 
 ## 性能 Performance
 
@@ -67,7 +68,14 @@ npm install        # 仅安装 eslint(devDependency)
 npm test           # 41 项单元测试(计算引擎 + 节假日解析)
 npm run lint       # ESLint
 npm run bench      # 基准测试
+npm run mobile:sync # 同步 Capacitor 原生工程
+npm run mobile:android # 打开 Android Studio
+npm run mobile:ios # 打开 Xcode(macOS)
 ```
+
+## 手机客户端封装
+
+项目使用 Capacitor 复用同一套 Web 业务代码，原生工程为 `android/` 和 `ios/`。执行 `npm run mobile:sync` 后，可用 Android Studio 或 Xcode 构建 APK/AAB 或 iOS 应用。iOS 构建需要 macOS、Xcode 和 Apple Developer 签名；客户端默认离线运行，数据保存在本机。
 
 <details>
 <summary>目录结构 Structure</summary>
@@ -101,6 +109,17 @@ Dockerfile          容器化部署
 </details>
 
 ## 部署方式 Deploy
+
+### 访客安装到手机
+
+推荐先点击上方 Netlify 或 Vercel 的一键部署按钮，为自己创建一个独立网址，再用手机打开该网址：
+
+- Android Chrome：点击页面的“立即安装”，或浏览器菜单中的“安装应用”。
+- iPhone / iPad：使用 Safari 打开网址，点击“分享”→“添加到主屏幕”。iOS 不支持在普通网页中弹出 Android 式安装按钮。
+- 安装后可以离线记账。数据默认只保存在当前设备、当前浏览器的本地存储中，不会自动同步到其他设备。
+- 更换设备、清理浏览器数据或卸载应用前，请在“设置 → 数据”导出 JSON 备份；“导出 Excel 表格”生成的 CSV 文件可以直接用 Excel 打开。
+
+完整 PWA 安装需要 HTTPS（GitHub Pages、Netlify、Vercel 默认支持）。直接双击 `index.html` 可以使用基础记账功能，但浏览器通常不会提供 PWA 安装能力。
 
 | 方式 | 命令 | 说明 |
 |---|---|---|

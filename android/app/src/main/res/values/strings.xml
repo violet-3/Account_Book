@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">打工人账本</string>
+    <string name="title_activity_main">打工人账本</string>
+    <string name="package_name">com.violet3.dagongledger</string>
+    <string name="custom_url_scheme">com.violet3.dagongledger</string>
+</resources>

@@ -22,12 +22,22 @@
     "start": "node server.js",
     "test": "node test/calc.test.mjs && node test/holiday.test.mjs && node test/savings.test.mjs",
     "lint": "eslint .",
-    "bench": "node test/bench.mjs"
+    "bench": "node test/bench.mjs",
+    "mobile:sync": "npx cap sync",
+    "mobile:android": "npx cap open android",
+    "mobile:ios": "npx cap open ios"
   },
   "devDependencies": {
     "eslint": "^9.39.4"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/ios": "^8.5.1",
+    "xlsx": "^0.18.5"
   }
 }

@@ -290,15 +290,15 @@
           <p class="hint">适合医护、工厂、客服等轮班人员，例如 2 天上班 + 2 天休息，请按实际班次设置。</p>
         </div>
         <p class="hint" v-if="state.settings.workType === 'flexible'">适合销售、外勤和弹性工作人员：默认每天可出勤，请在日历中按实际情况记录休息或请假。</p>
-        <label class="field">
-          <span>上班时间</span>
-          <input type="time" v-model="state.settings.workTimeStart">
-        </label>
-        <label class="field">
-          <span>下班时间</span>
-          <input type="time" v-model="state.settings.workTimeEnd">
-        </label>
-        <p class="hint">工作制会同步影响日历的应出勤天数、缺勤判定与加班倍率(排班休息日加班按 2 倍)。</p>
+        <details class="compact-details">
+          <summary>工作时间与规则说明</summary>
+          <div class="time-pair">
+            <label><span>上班</span><select v-model="state.settings.workTimeStart"><option v-if="!timeOptions.includes(state.settings.workTimeStart)" :value="state.settings.workTimeStart">{{ state.settings.workTimeStart }}</option><option v-for="time in timeOptions" :key="`start-${time}`" :value="time">{{ time }}</option></select></label>
+            <i aria-hidden="true">→</i>
+            <label><span>下班</span><select v-model="state.settings.workTimeEnd"><option v-if="!timeOptions.includes(state.settings.workTimeEnd)" :value="state.settings.workTimeEnd">{{ state.settings.workTimeEnd }}</option><option v-for="time in timeOptions" :key="`end-${time}`" :value="time">{{ time }}</option></select></label>
+          </div>
+          <p class="hint">工作制会同步影响日历的应出勤天数、缺勤判定与加班倍率(排班休息日加班按 2 倍)。</p>
+        </details>
       </div>
 
       <div class="card">
@@ -314,21 +314,24 @@
           <span>基数金额(元)</span>
           <input type="number" v-model.number="state.settings.sbBaseCustom" min="0" step="100">
         </label>
-        <div class="insurance-list">
-          <div class="insurance-row" v-for="item in state.settings.insuranceItems" :key="item.id">
-            <input class="insurance-name" v-model="item.name" maxlength="20" :disabled="['pension','medical','unemployment','housing'].includes(item.id)">
-            <input type="number" min="0" step="0.1" :value="(Number(item.rate || 0) * 100).toFixed(2)" @change="setInsuranceRate(item, $event.target.value)">
-            <span>%</span>
-            <label class="switch"><input type="checkbox" v-model="item.enabled"><span>启用</span></label>
-            <button class="icon-btn" type="button" @click="removeInsurance(item)" :aria-label="`停用或删除${item.name}`">×</button>
+        <details class="compact-details">
+          <summary>险种与比例 <small>{{ insuranceSummary }}</small></summary>
+          <div class="insurance-list">
+            <div class="insurance-row" v-for="item in state.settings.insuranceItems" :key="item.id">
+              <input class="insurance-name" v-model="item.name" maxlength="20" :disabled="['pension','medical','unemployment','housing'].includes(item.id)">
+              <input type="number" min="0" step="0.1" :value="(Number(item.rate || 0) * 100).toFixed(2)" @change="setInsuranceRate(item, $event.target.value)">
+              <span>%</span>
+              <label class="switch"><input type="checkbox" v-model="item.enabled"><span>启用</span></label>
+              <button class="icon-btn" type="button" @click="removeInsurance(item)" :aria-label="`停用或删除${item.name}`">×</button>
+            </div>
+            <button class="btn compact-btn" type="button" @click="addInsurance">＋ 自定义险种</button>
           </div>
-          <button class="btn" type="button" @click="addInsurance">＋ 自定义险种</button>
-        </div>
-        <details class="adv">
-          <summary>基数上下限(高级)</summary>
-          <label class="field"><span>基数下限(元)</span><input type="number" v-model.number="state.settings.sbFloor" min="0"></label>
-          <label class="field"><span>基数上限(元)</span><input type="number" v-model.number="state.settings.sbCeiling" min="0"></label>
-          <p class="hint">切换城市会自动重置以上参数为该城市参考值(每年约 7 月调整,以当地公布为准)。</p>
+          <details class="nested-details">
+            <summary>缴费基数上下限</summary>
+            <label class="field"><span>基数下限(元)</span><input type="number" v-model.number="state.settings.sbFloor" min="0"></label>
+            <label class="field"><span>基数上限(元)</span><input type="number" v-model.number="state.settings.sbCeiling" min="0"></label>
+            <p class="hint">切换城市会自动重置以上参数为该城市参考值。</p>
+          </details>
         </details>
       </div>
 
@@ -359,8 +362,8 @@
         <p class="hint">如子女教育、房贷利息、赡养老人、房租等,按每月可扣除总额填写。</p>
       </div>
 
-      <div class="card">
-        <div class="card-title">数据</div>
+      <details class="card settings-card">
+        <summary class="card-title">数据导入与导出</summary>
         <div class="btn-row">
           <button class="btn" @click="doExport">导出备份</button>
           <button class="btn" @click="doExportXLSX">导出 .xlsx</button>
@@ -372,7 +375,7 @@
           <button class="btn danger" @click="doClear">清空记录</button>
         </div>
         <p class="hint">所有数据仅保存在本设备浏览器中，不会上传服务器。可导出 `.xlsx` 在本地修改后通过“上传表格”恢复；换设备或清理浏览器前仍请保留 JSON 备份。CSV 文件可用 Excel 打开。</p>
-      </div>
+      </details>
 
       <p class="disclaim">打工人账本 v1.1 · 纯本地 Web 应用 · 费率参数为参考值;节假日数据依据国务院办公厅通知,内置 2025–2026,其他年份自动在线获取(holiday-cn 开源数据)。</p>
     </section>

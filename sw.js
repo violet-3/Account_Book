@@ -1,5 +1,5 @@
 /* sw.js — 离线缓存:network-first(保证更新及时),离线时回退缓存 */
-const CACHE = 'dagong-ledger-v6-ui';
+const CACHE = 'dagong-ledger-v7-compact-ui';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const ASSETS = [
   './js/db.js',
   './js/app.js',
   './vendor/vue.global.prod.js',
+  './vendor/xlsx.full.min.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];

@@ -372,9 +372,19 @@
   const medicalPct = pctField('medicalRate');
   const unemploymentPct = pctField('unemploymentRate');
   const cityList = computed(() => Object.entries(CITY).map(([k, v]) => ({ k, name: v.name })));
+  const timeOptions = Array.from({ length: 96 }, (_, index) => {
+    const hours = String(Math.floor(index / 4)).padStart(2, '0');
+    const minutes = String((index % 4) * 15).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  });
   const housingPct = computed({
     get: () => Math.round(state.settings.housingRate * 1000) / 10,
     set: v => { state.settings.housingRate = (Number(v) || 0) / 100; },
+  });
+  const insuranceSummary = computed(() => {
+    const enabled = (state.settings.insuranceItems || []).filter(item => item.enabled !== false);
+    const totalRate = enabled.reduce((sum, item) => sum + (Number(item.rate) || 0), 0);
+    return `${enabled.length} 项启用 · 合计 ${Math.round(totalRate * 10000) / 100}%`;
   });
   function setInsuranceRate(item, value) {
     item.rate = Math.max(0, Number(value) || 0) / 100;
@@ -541,7 +551,7 @@
         depDraft, openDeposit, saveDeposit, deleteDeposit,
         calYear, calMonth, calCells, calStat, calOtPay, calShift, calYearHint, calTimeoff,
         payYear, payMonth, pay, chartData, chartMax, payShift, percentStr,
-        cityList, housingPct, setInsuranceRate, addInsurance, removeInsurance,
+        cityList, timeOptions, housingPct, insuranceSummary, setInsuranceRate, addInsurance, removeInsurance,
         doExport, doExportCSV, doExportXLSX, onImportFile, onImportSpreadsheetFile, doClear, installApp, canInstall,
       };
     },

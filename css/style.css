@@ -680,13 +680,13 @@ input, select, textarea, button { max-width: 100%; }
 }
 
 /* 跨端控件与排版 */
-.field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 10px 16px; padding-block: 13px; }
+.field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 1.15fr); gap: 8px 14px; padding-block: 8px; }
 .field > span { flex-shrink: 1; }
 .field input:not([type="checkbox"]):not([type="range"]), .field select,
 .insurance-row input:not([type="checkbox"]), .note {
-  width: 100%; min-width: 0; min-height: 46px; font: inherit; font-size: 16px;
+  width: 100%; min-width: 0; min-height: 38px; font: inherit; font-size: 16px;
   color: var(--text); background-color: var(--bg); border: 1px solid var(--line);
-  border-radius: 12px; padding: 11px 12px; text-align: left;
+  border-radius: 10px; padding: 7px 10px; text-align: left;
 }
 .field select {
   appearance: none; padding-right: 36px; cursor: pointer; text-overflow: ellipsis;
@@ -697,19 +697,45 @@ select option { background: var(--card); color: var(--text); }
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible {
   outline: 3px solid var(--brand); outline-offset: 3px;
 }
-.btn, .chip, .nav-btn, .icon-btn, .dep-del, .tabbar button { min-height: 44px; }
+.btn { min-height: 40px; padding: 8px 14px; }
+.chip { min-height: 36px; padding-block: 6px; }
+.nav-btn, .icon-btn, .dep-del, .tabbar button { min-height: 44px; }
 .nav-btn, .icon-btn, .dep-del { min-width: 44px; }
 .btn-row .btn { flex: 1 1 130px; white-space: normal; }
-.insurance-row { grid-template-columns: minmax(0,1fr) 88px 16px; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
-.insurance-row .insurance-name { grid-column: 1 / -1; }
-.insurance-row .switch { grid-column: 1; grid-row: 2; min-height: 44px; font-size: .85rem; }
-.insurance-row input[type="number"] { grid-column: 2; grid-row: 2; }
-.insurance-row > span { grid-column: 3; grid-row: 2; }
-.insurance-row .icon-btn { grid-column: 3; justify-self: end; }
-.switch input { width: 20px; height: 20px; }
+.insurance-row { grid-template-columns: minmax(70px,1fr) 72px 14px auto 34px; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.insurance-row:last-of-type { border-bottom: 0; }
+.insurance-row .insurance-name,
+.insurance-row .switch,
+.insurance-row input[type="number"],
+.insurance-row > span,
+.insurance-row .icon-btn { grid-column: auto; grid-row: auto; }
+.insurance-row .insurance-name:disabled { border-color: transparent; background: transparent; padding-left: 2px; }
+.insurance-row .switch { min-height: 38px; font-size: .78rem; }
+.insurance-row .icon-btn { min-width: 34px; min-height: 38px; }
+.switch input { width: 18px; height: 18px; }
 .switch span { font-size: inherit; }
 .switch span::after { content: none; }
 .insurance-name:disabled { opacity: 1; -webkit-text-fill-color: var(--text-2); }
+.page-settings .card { padding: 13px 16px; margin-bottom: 10px; }
+.page-settings .card-title { margin-bottom: 6px; }
+.compact-details, .nested-details { border-top: 1px solid var(--line); margin-top: 7px; padding-top: 2px; }
+.compact-details > summary, .nested-details > summary, .settings-card > summary {
+  cursor: pointer; list-style: none; color: var(--brand); font-size: .84rem;
+  min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.compact-details > summary::-webkit-details-marker, .nested-details > summary::-webkit-details-marker, .settings-card > summary::-webkit-details-marker { display: none; }
+.compact-details > summary::after, .nested-details > summary::after, .settings-card > summary::after { content: '⌄'; color: var(--text-3); transition: transform .16s ease; }
+.compact-details[open] > summary::after, .nested-details[open] > summary::after, .settings-card[open] > summary::after { transform: rotate(180deg); }
+.compact-details > summary small { margin-left: auto; color: var(--text-3); font-weight: 400; font-size: .72rem; }
+.nested-details { margin: 8px 0 0 8px; }
+.nested-details > summary { color: var(--text-2); }
+.settings-card > summary.card-title { color: var(--text-2); font-weight: 600; margin: 0; }
+.settings-card[open] > summary.card-title { margin-bottom: 8px; }
+.compact-btn { width: 100%; margin-top: 6px; }
+.time-pair { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: end; gap: 8px; padding: 6px 0 8px; }
+.time-pair label { display: grid; gap: 4px; color: var(--text-2); font-size: .76rem; }
+.time-pair select { width: 100%; min-width: 0; min-height: 38px; appearance: none; color: var(--text); background-color: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 7px 30px 7px 10px; font: inherit; font-size: 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; }
+.time-pair > i { color: var(--text-3); font-style: normal; padding-bottom: 8px; }
 .li { flex-wrap: wrap; }
 .li > span { min-width: 0; flex: 1 1 100px; }
 .li b { white-space: normal; overflow-wrap: anywhere; }
@@ -729,10 +755,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .tabbar { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
 .tabbar button { min-width: 0; }
 @media (max-width: 599px) {
-  .field { grid-template-columns: minmax(0,1fr); gap: 8px; }
-  .field > span { font-size: .9rem; }
+  .field { grid-template-columns: minmax(0, .9fr) minmax(132px, 1.1fr); gap: 8px; }
+  .field > span { font-size: .84rem; }
   .overview .grid4 { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
   .ot-row { gap: 12px; }
+}
+@media (max-width: 380px) {
+  .field { grid-template-columns: minmax(0,1fr); }
+  .insurance-row { grid-template-columns: minmax(60px,1fr) 62px 12px 28px 30px; gap: 3px; }
+  .insurance-row .switch span { display: none; }
+  .insurance-row .switch { justify-content: center; }
+  .compact-details > summary small { display: none; }
 }
 @media (min-width: 640px) {
   .content { padding-top: max(32px, env(safe-area-inset-top)); }

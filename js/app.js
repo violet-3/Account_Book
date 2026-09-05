@@ -10,6 +10,17 @@
   const C = globalThis.CALC;
   const SAVINGS = globalThis.SAVINGS;
 
+  // VisualViewport follows mobile toolbars and keyboards without disabling zoom.
+  function updateViewport() {
+    const viewport = window.visualViewport;
+    if (!viewport || viewport.scale !== 1) return;
+    document.documentElement.style.setProperty('--visible-height', `${viewport.height}px`);
+    document.documentElement.style.setProperty('--visible-top', `${viewport.offsetTop}px`);
+  }
+  window.visualViewport?.addEventListener('resize', updateViewport);
+  window.visualViewport?.addEventListener('scroll', updateViewport);
+  updateViewport();
+
   /* ---------- 状态 ---------- */
   const state = reactive(DB.loadState());
   const hver = ref(0); // 节假日数据版本:在线拉取到新年份后自增,驱动依赖日历的 computed 重算

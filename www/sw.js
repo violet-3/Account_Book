@@ -1,5 +1,5 @@
 /* sw.js — 离线缓存:network-first(保证更新及时),离线时回退缓存 */
-const CACHE = 'dagong-ledger-v5';
+const CACHE = 'dagong-ledger-v6-ui';
 const ASSETS = [
   './',
   './index.html',

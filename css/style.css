@@ -42,13 +42,14 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 [v-cloak] { display: none; }
 
-html { font-size: 16px; }
+html { font-size: 16px; color-scheme: light dark; overflow-x: clip; scroll-padding-block: 24px 120px; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
   min-height: 100dvh;
+  overflow-wrap: anywhere;
 }
 
 .content {
@@ -496,6 +497,15 @@ section { animation: pagein .22s ease; }
   line-height: 1.6;
   margin-bottom: 14px;
 }
+
+/* 表单与动态视口：内容自然换行，保留系统选择器和页面缩放。 */
+.content, section, .card, .field, .field > *, .g4, .bar-wrap { min-width: 0; }
+.content {
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+input, select, textarea, button { max-width: 100%; }
 .schedule-box { background: var(--bg); border-radius: 12px; padding: 8px 12px; margin: 8px 0; }
 .insurance-list { display:flex; flex-direction:column; gap:8px; }
 .insurance-row { display:grid; grid-template-columns:minmax(0, 1fr) 74px 16px auto 28px; align-items:center; gap:6px; }
@@ -667,4 +677,71 @@ section { animation: pagein .22s ease; }
 @media (min-width: 1024px) and (prefers-color-scheme: dark) {
   body { background:
     radial-gradient(1200px 500px at 50% -10%, rgba(99, 102, 241, .12), transparent), var(--bg); }
+}
+
+/* 跨端控件与排版 */
+.field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 10px 16px; padding-block: 13px; }
+.field > span { flex-shrink: 1; }
+.field input:not([type="checkbox"]):not([type="range"]), .field select,
+.insurance-row input:not([type="checkbox"]), .note {
+  width: 100%; min-width: 0; min-height: 46px; font: inherit; font-size: 16px;
+  color: var(--text); background-color: var(--bg); border: 1px solid var(--line);
+  border-radius: 12px; padding: 11px 12px; text-align: left;
+}
+.field select {
+  appearance: none; padding-right: 36px; cursor: pointer; text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
+select option { background: var(--card); color: var(--text); }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 3px solid var(--brand); outline-offset: 3px;
+}
+.btn, .chip, .nav-btn, .icon-btn, .dep-del, .tabbar button { min-height: 44px; }
+.nav-btn, .icon-btn, .dep-del { min-width: 44px; }
+.btn-row .btn { flex: 1 1 130px; white-space: normal; }
+.insurance-row { grid-template-columns: minmax(0,1fr) 88px 16px; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
+.insurance-row .insurance-name { grid-column: 1 / -1; }
+.insurance-row .switch { grid-column: 1; grid-row: 2; min-height: 44px; font-size: .85rem; }
+.insurance-row input[type="number"] { grid-column: 2; grid-row: 2; }
+.insurance-row > span { grid-column: 3; grid-row: 2; }
+.insurance-row .icon-btn { grid-column: 3; justify-self: end; }
+.switch input { width: 20px; height: 20px; }
+.switch span { font-size: inherit; }
+.switch span::after { content: none; }
+.insurance-name:disabled { opacity: 1; -webkit-text-fill-color: var(--text-2); }
+.li { flex-wrap: wrap; }
+.li > span { min-width: 0; flex: 1 1 100px; }
+.li b { white-space: normal; overflow-wrap: anywhere; }
+.pay-hero .ph-num { font-size: clamp(1.8rem, 8vw, 2.7rem); }
+.overview .grid4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+.cal-grid, .cal-week { grid-template-columns: repeat(7, minmax(0,1fr)); }
+.cell .hname, .cell .otbadge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.worktime .wt, .goal-head, .dep-item { flex-wrap: wrap; }
+.dep-note { min-width: 0; }
+.toast { width: max-content; max-width: calc(100% - 32px); text-align: center; }
+.mask {
+  top: var(--visible-top, 0px); bottom: auto;
+  height: var(--visible-height, 100dvh); padding-top: max(12px, env(safe-area-inset-top));
+  padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);
+}
+.sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 20px; }
+.tabbar { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+.tabbar button { min-width: 0; }
+@media (max-width: 599px) {
+  .field { grid-template-columns: minmax(0,1fr); gap: 8px; }
+  .field > span { font-size: .9rem; }
+  .overview .grid4 { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+  .ot-row { gap: 12px; }
+}
+@media (min-width: 640px) {
+  .content { padding-top: max(32px, env(safe-area-inset-top)); }
+}
+@media (min-width: 1024px) {
+  .content { padding-top: max(44px, env(safe-area-inset-top)); }
+  .tabbar { overflow-y: auto; padding-top: max(30px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+  .tabbar button { flex: 0 0 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }

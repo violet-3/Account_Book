@@ -98,8 +98,10 @@ eq(y3.months[7].otPay, 0, 'otComp=none 时加班费为0');
 const st = monthStats(2026, 8, recs, H);
 is(st.otDays, 2, '8月加班2天');
 eq(st.otTotal, 4, '8月加班4小时');
+is(st.attended, 2, '月统计只计算已保存的出勤记录');
 const stWorkdays = monthStats(2026, 2, {}, H); // 2026年2月:28天-4个周末日? 2/1周日;周末:1,7,8,14(调休),15-23假,21,22,28(调休)
 is(stWorkdays.workdayCount, 16, '2026年2月应出勤:20个工作日-6天春节假+2天调休');
+is(stWorkdays.attended, 0, '空月份不预填出勤数据');
 
 /* ---- 9. annualTax 边界 ---- */
 eq(annualTax(0), 0, '0元不缴税');

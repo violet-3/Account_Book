@@ -263,18 +263,21 @@
   /* 汇总某月统计(今日页/日历页用,sched 为可选排班配置) */
   function monthStats(year, month, records, holidays, sched) {
     const dim = daysInMonth(year, month);
-    let attended = 0, otTotal = 0, otDays = 0, unpaid = 0, workdayCount = 0;
+    let attended = 0, otTotal = 0, otDays = 0, unpaid = 0, workdayCount = 0, recorded = 0;
     for (let d = 1; d <= dim; d++) {
       const ds = fmtDate(year, month, d);
       const rec = records[ds];
       const kind = dayKind(ds, holidays, sched);
       if (kind === 'workday' || kind === 'makeup') workdayCount++;
-      if (isAttended(ds, rec, holidays, sched)) attended++;
-      unpaid += unpaidDaysOf(ds, rec, holidays, sched);
+      if (rec) {
+        recorded++;
+        if (isAttended(ds, rec, holidays, sched)) attended++;
+        unpaid += unpaidDaysOf(ds, rec, holidays, sched);
+      }
       const h = rec ? num(rec.ot) : 0;
       if (h > 0) { otTotal += h; otDays++; }
     }
-    return { attended, workdayCount, otTotal: round2(otTotal), otDays, unpaid };
+    return { attended, recorded, workdayCount, otTotal: round2(otTotal), otDays, unpaid };
   }
 
   const CALC = {

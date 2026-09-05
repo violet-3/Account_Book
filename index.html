@@ -21,18 +21,9 @@
     <div class="storage-warn" v-if="!storageOk">
       ⚠️ 当前环境无法写入本地存储,记录仅保留到关闭页面前。请用 Chrome / Edge / 手机浏览器打开,或部署到静态托管后使用。
     </div>
-    <div class="install-card" v-if="canInstall || page === 'settings'">
-      <span><b>安装到手机</b><small>离线打开，像 App 一样使用</small></span>
-      <button class="btn primary" v-if="canInstall" @click="installApp">立即安装</button>
-      <small v-else class="install-tip">Android 点安装按钮；iPhone/iPad 请用 Safari 分享菜单 → 添加到主屏幕</small>
-    </div>
-
     <!-- ============ 今日打卡 ============ -->
     <section v-show="page==='today'" class="page-today">
-      <header class="page-head">
-        <h1>今日打卡</h1>
-        <p class="sub">{{ todayStr }} · 今天是{{ todayKindLabel }}<template v-if="todayHolidayName"> · {{ todayHolidayName }}</template></p>
-      </header>
+      <p class="page-context">{{ todayStr }} · 今天是{{ todayKindLabel }}<template v-if="todayHolidayName"> · {{ todayHolidayName }}</template></p>
 
       <div class="card worktime">
         <div class="wt">
@@ -85,23 +76,10 @@
 
       <button class="btn primary block" @click="saveDraft()">保存今日记录</button>
 
-      <div class="card overview">
-        <div class="card-title">{{ now.m }}月概览</div>
-        <div class="grid4">
-          <div class="g4"><b>{{ thisMonthStat.attended }}</b><i>已出勤/天</i></div>
-          <div class="g4"><b>{{ thisMonthStat.otTotal }}</b><i>加班/小时</i></div>
-          <div class="g4"><b v-if="effSettings.otComp === 'timeoff'">{{ thisMonthPay.timeoffHours }}h</b><b v-else>¥{{ fmtMoney(thisMonthPay.otPay) }}</b><i>{{ effSettings.otComp === 'timeoff' ? '可调休' : '加班费' }}</i></div>
-          <div class="g4 hl"><b>¥{{ fmtMoney(thisMonthPay.net, true) }}</b><i>预估实发</i></div>
-        </div>
-      </div>
     </section>
 
     <!-- ============ 出勤日历 ============ -->
     <section v-show="page==='calendar'" class="page-calendar">
-      <header class="page-head">
-        <h1>出勤日历</h1>
-      </header>
-
       <div class="month-nav">
         <button class="nav-btn" @click="calShift(-1)">‹</button>
         <b>{{ calYear }}年{{ calMonth }}月</b>
@@ -137,32 +115,36 @@
 
       <div class="card overview">
         <div class="card-title">{{ calMonth }}月统计</div>
-        <div class="grid4">
+        <div class="grid4" v-if="calHasRecords">
           <div class="g4"><b>{{ calStat.attended }}<i class="sub-n">/{{ calStat.workdayCount }}</i></b><i>出勤/应出勤</i></div>
           <div class="g4"><b>{{ calStat.otTotal }}</b><i>加班/小时</i></div>
           <div class="g4"><b>{{ calStat.unpaid }}</b><i>缺勤/天</i></div>
           <div class="g4 hl"><b v-if="effSettings.otComp === 'timeoff'">{{ calTimeoff }}h</b><b v-else>¥{{ fmtMoney(calOtPay) }}</b><i>{{ effSettings.otComp === 'timeoff' ? '可调休' : '加班费' }}</i></div>
         </div>
+        <div class="empty-inline" v-else>本月还没有记录</div>
       </div>
     </section>
 
     <!-- ============ 工资估算 ============ -->
     <section v-show="page==='pay'" class="page-pay">
-      <header class="page-head">
-        <h1>工资估算</h1>
-      </header>
-
       <div class="month-nav">
         <button class="nav-btn" @click="payShift(-1)">‹</button>
         <b>{{ payYear }}年{{ payMonth }}月</b>
         <button class="nav-btn" @click="payShift(1)">›</button>
       </div>
 
+      <div class="card empty-state" v-if="!pay.recorded">
+        <span class="empty-icon">○</span>
+        <b>本月还没有记录</b>
+        <p>先在“今日”或“日历”中保存出勤，工资估算会在有真实记录后显示。</p>
+      </div>
+
+      <template v-else>
       <div class="pay-hero card">
         <p class="ph-label">预估到手</p>
         <p class="ph-num"><i>¥</i>{{ fmtMoney(pay.net) }}</p>
         <p class="ph-sub">应发 ¥{{ fmtMoney(pay.gross) }} · 扣五险一金 ¥{{ fmtMoney(pay.social.total) }} · 扣个税 ¥{{ fmtMoney(pay.tax) }}</p>
-        <p class="ph-tag" v-if="!pay.recorded">本月暂无考勤记录,按全勤估算</p>
+        <p class="ph-tag">已记录 {{ payRecordedDays }} 天 · 其余日期按排班估算</p>
       </div>
 
       <div class="card">
@@ -220,8 +202,9 @@
           <p>个税按<b>累计预扣预缴法</b>:年初至本月累计应纳税所得额 ¥{{ fmtMoney(pay.cumTaxable) }},适用税率 {{ percentStr(pay.taxRate) }},减去前几个月已缴。</p>
         </div>
       </details>
+      </template>
 
-      <div class="card">
+      <div class="card" v-if="hasYearRecords">
         <div class="card-title">{{ payYear }}年实发走势</div>
         <div class="chart">
           <div class="bar-wrap" v-for="b in chartData" :key="b.label">
@@ -237,10 +220,6 @@
 
     <!-- ============ 设置 ============ -->
     <section v-show="page==='settings'" class="page-settings">
-      <header class="page-head">
-        <h1>设置</h1>
-      </header>
-
       <div class="card">
         <div class="card-title">薪资</div>
         <label class="field">
@@ -293,9 +272,9 @@
         <details class="compact-details">
           <summary>工作时间与规则说明</summary>
           <div class="time-pair">
-            <label><span>上班</span><select v-model="state.settings.workTimeStart"><option v-if="!timeOptions.includes(state.settings.workTimeStart)" :value="state.settings.workTimeStart">{{ state.settings.workTimeStart }}</option><option v-for="time in timeOptions" :key="`start-${time}`" :value="time">{{ time }}</option></select></label>
+            <button type="button" @click="openTimePicker('start')"><span>上班</span><b>{{ state.settings.workTimeStart }}</b></button>
             <i aria-hidden="true">→</i>
-            <label><span>下班</span><select v-model="state.settings.workTimeEnd"><option v-if="!timeOptions.includes(state.settings.workTimeEnd)" :value="state.settings.workTimeEnd">{{ state.settings.workTimeEnd }}</option><option v-for="time in timeOptions" :key="`end-${time}`" :value="time">{{ time }}</option></select></label>
+            <button type="button" @click="openTimePicker('end')"><span>下班</span><b>{{ state.settings.workTimeEnd }}</b></button>
           </div>
           <p class="hint">工作制会同步影响日历的应出勤天数、缺勤判定与加班倍率(排班休息日加班按 2 倍)。</p>
         </details>
@@ -377,15 +356,9 @@
         <p class="hint">所有数据仅保存在本设备浏览器中，不会上传服务器。可导出 `.xlsx` 在本地修改后通过“上传表格”恢复；换设备或清理浏览器前仍请保留 JSON 备份。CSV 文件可用 Excel 打开。</p>
       </details>
 
-      <p class="disclaim">打工人账本 v1.1 · 纯本地 Web 应用 · 费率参数为参考值;节假日数据依据国务院办公厅通知,内置 2025–2026,其他年份自动在线获取(holiday-cn 开源数据)。</p>
     </section>
     <!-- ============ 攒钱 ============ -->
     <section v-show="page==='save'" class="page-save">
-      <header class="page-head">
-        <h1>攒钱</h1>
-        <p class="sub">目标账户法:专款专用,一点点攒下想要的</p>
-      </header>
-
       <div class="pay-hero sav-hero">
         <p class="ph-label">今年已攒</p>
         <p class="ph-num"><i>¥</i>{{ fmtMoney(savYear.savedThisYear) }}</p>
@@ -444,6 +417,33 @@
       </div>
     </section>
   </main>
+
+  <!-- 上下班时间滚轮 -->
+  <div class="mask" v-if="timePicker.open" @click.self="timePicker.open = false">
+    <div class="sheet time-wheel-sheet">
+      <div class="sheet-head"><b>选择{{ timePicker.target === 'start' ? '上班' : '下班' }}时间</b></div>
+      <div class="wheel-picker">
+        <label>
+          <span>小时</span>
+          <select size="5" v-model="timePicker.hour">
+            <option v-for="hour in hourOptions" :key="hour" :value="hour">{{ hour }}</option>
+          </select>
+        </label>
+        <i>:</i>
+        <label>
+          <span>分钟</span>
+          <select size="5" v-model="timePicker.minute">
+            <option v-for="minute in minuteOptions" :key="minute" :value="minute">{{ minute }}</option>
+          </select>
+        </label>
+      </div>
+      <div class="time-preview">{{ timePicker.hour }}:{{ timePicker.minute }}</div>
+      <div class="btn-row">
+        <button class="btn ghost" @click="timePicker.open = false">取消</button>
+        <button class="btn primary" @click="saveTimePicker">确定</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 任意日期编辑弹层 -->
   <div class="mask" v-if="draft.open" @click.self="draft.open = false">

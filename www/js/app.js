@@ -25,12 +25,6 @@
   const state = reactive(DB.loadState());
   const hver = ref(0); // 节假日数据版本:在线拉取到新年份后自增,驱动依赖日历的 computed 重算
   const storageOk = ref(DB.storage.ok);
-  const installPrompt = ref(null);
-  const canInstall = ref(false);
-  window.addEventListener('beforeinstallprompt', (event) => {
-    event.preventDefault(); installPrompt.value = event; canInstall.value = true;
-  });
-  window.addEventListener('appinstalled', () => { installPrompt.value = null; canInstall.value = false; });
   watch(state, () => {
     if (!DB.saveState(state)) storageOk.value = false;
   }, { deep: true });
@@ -112,10 +106,7 @@
   }
 
   function saveDraft() {
-    const inferred = inferredStatus(draft.date);
-    const empty = draft.status === inferred && !draft.ot && !draft.note;
-    if (empty) delete state.records[draft.date];
-    else state.records[draft.date] = {
+    state.records[draft.date] = {
       status: draft.status,
       ot: draft.ot > 0 ? draft.ot : 0,
       otType: draft.otType === 'auto' ? '' : draft.otType,
@@ -155,9 +146,8 @@
     return Number(r) || (t === 'holiday' ? 3 : t === 'weekend' ? 2 : 1.5);
   });
 
-  /* 今日页本月概览 */
+  /* 当前月份 */
   const now = { y: new Date().getFullYear(), m: new Date().getMonth() + 1 };
-  const thisMonthStat = computed(() => { hver.value; return C.monthStats(now.y, now.m, state.records, H, schedule.value); });
   const thisMonthPay = computed(() => { hver.value; return C.calcYear(now.y, effSettings.value, state.records, H).months[now.m - 1]; });
 
   /* 上下班时间与在岗状态(打开页面时快照) */
@@ -231,6 +221,7 @@
     return cells;
   });
   const calStat = computed(() => { hver.value; return C.monthStats(calYear.value, calMonth.value, state.records, H, schedule.value); });
+  const calHasRecords = computed(() => calStat.value.recorded > 0);
   const calOtPay = computed(() => { hver.value; return C.calcYear(calYear.value, effSettings.value, state.records, H).months[calMonth.value - 1].otPay; });
   const calTimeoff = computed(() => { hver.value; return C.calcYear(calYear.value, effSettings.value, state.records, H).months[calMonth.value - 1].timeoffHours; });
   const calYearHint = computed(() => {
@@ -252,8 +243,10 @@
   const yearResult = computed(() => { hver.value; return C.calcYear(payYear.value, effSettings.value, state.records, H); });
   const pay = computed(() => yearResult.value.months[payMonth.value - 1]);
   const chartData = computed(() => yearResult.value.months.map(m => ({
-    label: `${m.month}`, net: m.net, cur: m.month === payMonth.value,
+    label: `${m.month}`, net: m.recorded ? m.net : 0, cur: m.month === payMonth.value,
   })));
+  const hasYearRecords = computed(() => yearResult.value.months.some(m => m.recorded));
+  const payRecordedDays = computed(() => Object.keys(state.records).filter(date => date.startsWith(`${payYear.value}-${String(payMonth.value).padStart(2, '0')}-`)).length);
   const chartMax = computed(() => Math.max(...chartData.value.map(c => c.net), 1));
   function payShift(delta) {
     let m = payMonth.value + delta, y = payYear.value;
@@ -372,11 +365,20 @@
   const medicalPct = pctField('medicalRate');
   const unemploymentPct = pctField('unemploymentRate');
   const cityList = computed(() => Object.entries(CITY).map(([k, v]) => ({ k, name: v.name })));
-  const timeOptions = Array.from({ length: 96 }, (_, index) => {
-    const hours = String(Math.floor(index / 4)).padStart(2, '0');
-    const minutes = String((index % 4) * 15).padStart(2, '0');
-    return `${hours}:${minutes}`;
-  });
+  const hourOptions = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
+  const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
+  const timePicker = reactive({ open: false, target: 'start', hour: '09', minute: '00' });
+  function openTimePicker(target) {
+    const value = target === 'start' ? state.settings.workTimeStart : state.settings.workTimeEnd;
+    const [hour, minute] = String(value || (target === 'start' ? '09:00' : '18:00')).split(':');
+    Object.assign(timePicker, { open: true, target, hour: hourOptions.includes(hour) ? hour : '00', minute: minuteOptions.includes(minute) ? minute : '00' });
+  }
+  function saveTimePicker() {
+    const value = `${timePicker.hour}:${timePicker.minute}`;
+    if (timePicker.target === 'start') state.settings.workTimeStart = value;
+    else state.settings.workTimeEnd = value;
+    timePicker.open = false;
+  }
   const housingPct = computed({
     get: () => Math.round(state.settings.housingRate * 1000) / 10,
     set: v => { state.settings.housingRate = (Number(v) || 0) / 100; },
@@ -431,7 +433,7 @@
     (state.savings.deposits || []).forEach(d => savings.push([d.date, d.amount, d.goalId || '', goals[d.goalId] || '', d.note || '']));
     xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(savings), '储蓄记录');
     const wages = [['月份', '基本工资', '补贴', '加班费', '缺勤扣款', '五险一金', '个税', '预计实发工资']];
-    yearResult.value.months.forEach(m => wages.push([m.label, m.gross - m.allowance - m.otPay + m.deduction, m.allowance, m.otPay, m.deduction, m.social.total, m.tax, m.net]));
+    yearResult.value.months.filter(m => m.recorded).forEach(m => wages.push([m.label, m.gross - m.allowance - m.otPay + m.deduction, m.allowance, m.otPay, m.deduction, m.social.total, m.tax, m.net]));
     xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(wages), '工资估算');
     const settingRows = [['项目', '值'], ['月薪基数', state.settings.baseSalary], ['城市', state.settings.city], ['排班', state.settings.workType], ['数据说明', '所有数据仅保存在本设备']];
     state.settings.insuranceItems.forEach(item => settingRows.push([`险种:${item.id}`, `${item.name}|${item.enabled ? 1 : 0}|${item.rate}`]));
@@ -495,11 +497,6 @@
     };
     reader.readAsArrayBuffer(file);
   }
-  async function installApp() {
-    if (!installPrompt.value) { showToast('请在浏览器菜单中选择“添加到主屏幕”'); return; }
-    installPrompt.value.prompt(); await installPrompt.value.userChoice;
-    installPrompt.value = null; canInstall.value = false;
-  }
   function onImportFile(ev) {
     const file = ev.target.files && ev.target.files[0];
     ev.target.value = '';
@@ -545,14 +542,15 @@
         draftDateLabel, draftKindLabel, siOpen, pay0,
         pensionPct, medicalPct, unemploymentPct,
         todayStr, todayRec, todayKindLabel, todayHolidayName, todayOtType, todayOtRate,
-        thisMonthStat, thisMonthPay, now, workStatus, setAnchor, thisWeekendHint, fmtDur,
+        thisMonthPay, now, workStatus, setAnchor, thisWeekendHint, fmtDur,
         GOAL_TEMPLATES, savYear, goalCards, expandedGoal,
         goalDraft, openGoalEditor, applyTemplate, saveGoal, deleteGoal,
         depDraft, openDeposit, saveDeposit, deleteDeposit,
-        calYear, calMonth, calCells, calStat, calOtPay, calShift, calYearHint, calTimeoff,
-        payYear, payMonth, pay, chartData, chartMax, payShift, percentStr,
-        cityList, timeOptions, housingPct, insuranceSummary, setInsuranceRate, addInsurance, removeInsurance,
-        doExport, doExportCSV, doExportXLSX, onImportFile, onImportSpreadsheetFile, doClear, installApp, canInstall,
+        calYear, calMonth, calCells, calStat, calHasRecords, calOtPay, calShift, calYearHint, calTimeoff,
+        payYear, payMonth, pay, payRecordedDays, hasYearRecords, chartData, chartMax, payShift, percentStr,
+        cityList, hourOptions, minuteOptions, timePicker, openTimePicker, saveTimePicker,
+        housingPct, insuranceSummary, setInsuranceRate, addInsurance, removeInsurance,
+        doExport, doExportCSV, doExportXLSX, onImportFile, onImportSpreadsheetFile, doClear,
       };
     },
   }).mount('#app');

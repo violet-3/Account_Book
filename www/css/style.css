@@ -64,6 +64,7 @@ section { animation: pagein .22s ease; }
 .page-head { padding: 4px 4px 14px; }
 .page-head h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: .5px; }
 .page-head .sub { color: var(--text-2); font-size: .85rem; margin-top: 2px; }
+.page-context { color: var(--text-2); font-size: .82rem; padding: 0 4px 10px; }
 
 /* ---------- 卡片 ---------- */
 .card {
@@ -497,6 +498,11 @@ section { animation: pagein .22s ease; }
   line-height: 1.6;
   margin-bottom: 14px;
 }
+.empty-inline { color: var(--text-3); font-size: .82rem; text-align: center; padding: 12px 0 4px; }
+.empty-state { display: grid; justify-items: center; gap: 7px; text-align: center; padding: 28px 18px; color: var(--text-2); }
+.empty-state b { color: var(--text); }
+.empty-state p { max-width: 360px; font-size: .82rem; }
+.empty-icon { display: grid; place-items: center; width: 38px; height: 38px; border: 2px dashed var(--line); border-radius: 50%; color: var(--brand); font-size: 1.4rem; }
 
 /* 表单与动态视口：内容自然换行，保留系统选择器和页面缩放。 */
 .content, section, .card, .field, .field > *, .g4, .bar-wrap { min-width: 0; }
@@ -649,6 +655,7 @@ input, select, textarea, button { max-width: 100%; }
   .page-head h1 { font-size: 1.9rem; }
   section { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
   section > .page-head,
+  section > .page-context,
   section > .month-nav,
   section > .storage-warn,
   section > .disclaim,
@@ -657,6 +664,7 @@ input, select, textarea, button { max-width: 100%; }
   section > .pay-hero {
     grid-column: 1 / -1;
   }
+  section > .empty-state { grid-column: 1 / -1; }
   /* 日历页:日历与统计并排 */
   .page-calendar > .card.cal { grid-column: 1; }
   .page-calendar > .overview { grid-column: 2; grid-row: 3; }
@@ -733,9 +741,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .settings-card[open] > summary.card-title { margin-bottom: 8px; }
 .compact-btn { width: 100%; margin-top: 6px; }
 .time-pair { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: end; gap: 8px; padding: 6px 0 8px; }
-.time-pair label { display: grid; gap: 4px; color: var(--text-2); font-size: .76rem; }
-.time-pair select { width: 100%; min-width: 0; min-height: 38px; appearance: none; color: var(--text); background-color: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 7px 30px 7px 10px; font: inherit; font-size: 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; }
+.time-pair button { display: grid; gap: 2px; width: 100%; min-height: 48px; color: var(--text-2); background: var(--bg); border: 1px solid var(--line); border-radius: 11px; padding: 6px 10px; font: inherit; cursor: pointer; }
+.time-pair button span { font-size: .7rem; }
+.time-pair button b { color: var(--text); font-size: 1rem; font-variant-numeric: tabular-nums; }
 .time-pair > i { color: var(--text-3); font-style: normal; padding-bottom: 8px; }
+.time-wheel-sheet { max-width: 320px; border-radius: 20px 20px 0 0; padding-inline: 20px; }
+.wheel-picker { display: grid; grid-template-columns: minmax(0,1fr) 16px minmax(0,1fr); align-items: center; gap: 8px; }
+.wheel-picker label { display: grid; gap: 6px; color: var(--text-3); font-size: .72rem; text-align: center; }
+.wheel-picker > i { color: var(--text-2); font-style: normal; font-size: 1.6rem; text-align: center; }
+.wheel-picker select { width: 100%; height: 170px; overflow-y: auto; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 4px; font: inherit; font-size: 1.05rem; text-align: center; scrollbar-width: thin; }
+.wheel-picker option { padding: 8px 4px; border-radius: 8px; }
+.wheel-picker option:checked { background: var(--brand-grad); color: #fff; }
+.time-preview { margin: 10px 0; text-align: center; color: var(--brand); font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.time-wheel-sheet .btn-row { margin-top: 0; }
 .li { flex-wrap: wrap; }
 .li > span { min-width: 0; flex: 1 1 100px; }
 .li b { white-space: normal; overflow-wrap: anywhere; }

@@ -15,9 +15,12 @@
     monthlyAllowance: 0,     // 每月固定补贴(计税)
     workTimeStart: '09:00',  // 上班时间
     workTimeEnd: '18:00',    // 下班时间
-    workType: 'two',         // 排班:two 双休 | one 单休 | bigsmall 大小周
+    workType: 'two',         // 排班:two 双休 | one 单休 | bigsmall 大小周 | shift 轮班 | flexible 弹性
     anchorWeekStart: '',     // 大小周锚点:某周的周一(YYYY-MM-DD)
     anchorType: 'big',       // 锚点周类型:big 大周(双休) | small 小周(单休)
+    shiftAnchorDate: '',     // 轮班周期起算日
+    shiftWorkDays: 2,        // 轮班连续上班天数
+    shiftRestDays: 2,        // 轮班连续休息天数
     sbBaseMode: 'salary',    // 社保基数:'salary'按月薪 | 'custom'手动
     sbBaseCustom: 10000,
     sbFloor: 6821,           // 缴费基数下限(随城市初始化,可改)
@@ -26,6 +29,12 @@
     medicalRate: 0.02,
     unemploymentRate: 0.005,
     housingRate: 0.12,       // 公积金个人比例
+    insuranceItems: [
+      { id: 'pension', name: '养老保险', enabled: true, rate: 0.08 },
+      { id: 'medical', name: '医疗保险', enabled: true, rate: 0.02 },
+      { id: 'unemployment', name: '失业保险', enabled: true, rate: 0.005 },
+      { id: 'housing', name: '住房公积金', enabled: true, rate: 0.12 },
+    ],
     otComp: 'pay',           // 加班补偿:'pay'加班费 | 'timeoff'调休折算 | 'none'仅记录
     otRateWorkday: 1.5,
     otRateWeekend: 2,
@@ -61,10 +70,19 @@
       const raw = localStorage.getItem(KEY);
       if (!raw) return defaults();
       const data = JSON.parse(raw);
+      const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+      if (!data.settings || !Array.isArray(data.settings.insuranceItems)) {
+        settings.insuranceItems = [
+          { id: 'pension', name: '养老保险', enabled: true, rate: Number(settings.pensionRate) || 0 },
+          { id: 'medical', name: '医疗保险', enabled: true, rate: Number(settings.medicalRate) || 0 },
+          { id: 'unemployment', name: '失业保险', enabled: true, rate: Number(settings.unemploymentRate) || 0 },
+          { id: 'housing', name: '住房公积金', enabled: true, rate: Number(settings.housingRate) || 0 },
+        ];
+      }
       return {
         ...defaults(),
         ...data,
-        settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) },
+        settings: { ...settings, insuranceItems: normalizeInsuranceItems(settings.insuranceItems) },
         records: data.records || {},
         savings: {
           goals: (data.savings && data.savings.goals) || [],
@@ -111,11 +129,17 @@
     if (!data || typeof data !== 'object') throw new Error('文件格式不正确');
     const records = data.records && typeof data.records === 'object' ? data.records : {};
     const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+    settings.insuranceItems = normalizeInsuranceItems(settings.insuranceItems);
     const savings = {
       goals: (data.savings && data.savings.goals) || [],
       deposits: (data.savings && data.savings.deposits) || [],
     };
     return { records, settings, savings };
+  }
+
+  function normalizeInsuranceItems(items) {
+    if (!Array.isArray(items) || !items.length) return DEFAULT_SETTINGS.insuranceItems.map(x => ({ ...x }));
+    return items.filter(x => x && x.id).map(x => ({ id: String(x.id), name: String(x.name || x.id), enabled: x.enabled !== false, rate: Number(x.rate) >= 0 ? Number(x.rate) : 0 }));
   }
 
   function csvCell(value) {

@@ -46,6 +46,12 @@
     s.sbFloor = c.floor; s.sbCeiling = c.ceiling;
     s.pensionRate = c.pension; s.medicalRate = c.medical;
     s.unemploymentRate = c.unemployment; s.housingRate = c.housingDefault;
+    (s.insuranceItems || []).forEach(item => {
+      if (item.id === 'pension') item.rate = c.pension;
+      if (item.id === 'medical') item.rate = c.medical;
+      if (item.id === 'unemployment') item.rate = c.unemployment;
+      if (item.id === 'housing') item.rate = c.housingDefault;
+    });
   }
 
   /* ---------- 通用 ---------- */
@@ -359,6 +365,22 @@
     get: () => Math.round(state.settings.housingRate * 1000) / 10,
     set: v => { state.settings.housingRate = (Number(v) || 0) / 100; },
   });
+  function setInsuranceRate(item, value) {
+    item.rate = Math.max(0, Number(value) || 0) / 100;
+    if (item.id === 'pension') state.settings.pensionRate = item.rate;
+    if (item.id === 'medical') state.settings.medicalRate = item.rate;
+    if (item.id === 'unemployment') state.settings.unemploymentRate = item.rate;
+    if (item.id === 'housing') state.settings.housingRate = item.rate;
+  }
+  function addInsurance() {
+    state.settings.insuranceItems.push({ id: `custom-${Date.now().toString(36)}`, name: '新险种', enabled: true, rate: 0 });
+    showToast('已添加自定义险种');
+  }
+  function removeInsurance(item) {
+    if (['pension', 'medical', 'unemployment', 'housing'].includes(item.id)) { item.enabled = false; showToast('已停用该险种'); return; }
+    state.settings.insuranceItems = state.settings.insuranceItems.filter(x => x.id !== item.id);
+    showToast('已删除自定义险种');
+  }
 
   function doExport() {
     const blob = new Blob([DB.exportJSON(state)], { type: 'application/json' });
@@ -384,12 +406,73 @@
     Object.keys(state.records || {}).sort().forEach(date => { const r = state.records[date] || {}; const d = new Date(`${date}T00:00:00`); rows.push([date, ['日','一','二','三','四','五','六'][d.getDay()], status[r.status] || r.status || '', r.ot || 0, r.otType || '自动判定', r.note || '']); });
     xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(rows), '考勤明细');
     const goals = Object.fromEntries((state.savings.goals || []).map(g => [g.id, g.name]));
-    const savings = [['日期', '金额', '目标', '备注']];
-    (state.savings.deposits || []).forEach(d => savings.push([d.date, d.amount, goals[d.goalId] || '', d.note || '']));
+    const savings = [['日期', '金额', '目标ID', '目标名称', '备注']];
+    (state.savings.deposits || []).forEach(d => savings.push([d.date, d.amount, d.goalId || '', goals[d.goalId] || '', d.note || '']));
     xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(savings), '储蓄记录');
-    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet([['项目', '值'], ['月薪基数', state.settings.baseSalary], ['城市', cityName.value], ['排班', state.settings.workType], ['数据说明', '所有数据仅保存在本设备']]), '设置说明');
+    const wages = [['月份', '基本工资', '补贴', '加班费', '缺勤扣款', '五险一金', '个税', '预计实发工资']];
+    yearResult.value.months.forEach(m => wages.push([m.label, m.gross - m.allowance - m.otPay + m.deduction, m.allowance, m.otPay, m.deduction, m.social.total, m.tax, m.net]));
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(wages), '工资估算');
+    const settingRows = [['项目', '值'], ['月薪基数', state.settings.baseSalary], ['城市', state.settings.city], ['排班', state.settings.workType], ['数据说明', '所有数据仅保存在本设备']];
+    state.settings.insuranceItems.forEach(item => settingRows.push([`险种:${item.id}`, `${item.name}|${item.enabled ? 1 : 0}|${item.rate}`]));
+    xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(settingRows), '设置说明');
     xlsx.writeFile(wb, `打工账本-${todayStr}.xlsx`);
     showToast('已导出 Excel 文件');
+  }
+  function parseSpreadsheetRows(rows) {
+    const header = rows[0] || [];
+    const index = name => header.indexOf(name);
+    const dateI = index('日期'), statusI = index('出勤状态'), otI = index('加班时长(小时)'), typeI = index('加班类型'), noteI = index('备注');
+    const statusMap = { '出勤': 'work', '休息': 'rest', '带薪假': 'leave_paid', '无薪假': 'leave_unpaid', '病假': 'sick', '旷工': 'absent' };
+    const typeMap = { '工作日 ×1.5': 'workday', '周末 ×2': 'weekend', '法定节假日 ×3': 'holiday', '自动判定': '' };
+    const records = {};
+    rows.slice(1).forEach(row => {
+      const date = String(row[dateI] || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+      records[date] = { status: statusMap[row[statusI]] || row[statusI] || 'work', ot: Number(row[otI]) || 0, otType: typeMap[row[typeI]] || row[typeI] || '', note: row[noteI] || '' };
+    });
+    return records;
+  }
+  function onImportSpreadsheetFile(ev) {
+    const file = ev.target.files && ev.target.files[0]; ev.target.value = '';
+    if (!file) return;
+    if (!globalThis.XLSX) { alert('Excel 模块尚未加载'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const xlsx = globalThis.XLSX;
+        const book = xlsx.read(reader.result, { type: 'array', cellDates: true });
+        const attendanceSheet = book.Sheets['考勤明细'] || book.Sheets[book.SheetNames[0]];
+        const attendanceRows = xlsx.utils.sheet_to_json(attendanceSheet, { header: 1, raw: false });
+        const records = parseSpreadsheetRows(attendanceRows);
+        const savingsSheet = book.Sheets['储蓄记录'];
+        const savingsRows = savingsSheet ? xlsx.utils.sheet_to_json(savingsSheet, { header: 1, raw: false }) : (() => { const start = attendanceRows.findIndex(row => row[0] === '储蓄记录'); return start >= 0 ? attendanceRows.slice(start + 1) : []; })();
+        const sh = savingsRows[0] || [];
+        const si = sh.indexOf('日期'), ai = sh.indexOf('金额'), gi = sh.indexOf('目标ID'), ni = sh.indexOf('备注');
+        const deposits = savingsRows.slice(1).filter(row => /^\d{4}-\d{2}-\d{2}$/.test(String(row[si] || '').slice(0, 10))).map(row => ({ id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, date: String(row[si]).slice(0, 10), amount: Number(row[ai]) || 0, goalId: row[gi] || '', note: row[ni] || '' }));
+        const settingSheet = book.Sheets['设置说明'];
+        const settingRows = settingSheet ? xlsx.utils.sheet_to_json(settingSheet, { header: 1, raw: false }) : [];
+        const importedSettings = {};
+        const importedItems = [];
+        settingRows.slice(1).forEach(row => {
+          const key = String(row[0] || ''), value = row[1];
+          if (key === '月薪基数') importedSettings.baseSalary = Number(value) || 0;
+          if (key === '城市') importedSettings.city = value;
+          if (key === '排班') importedSettings.workType = value;
+          if (key.startsWith('险种:')) {
+            const [name, enabled, rate] = String(value || '').split('|');
+            importedItems.push({ id: key.slice(3), name: name || key.slice(3), enabled: enabled !== '0', rate: Number(rate) || 0 });
+          }
+        });
+        if (!confirm(`将导入 ${Object.keys(records).length} 条考勤记录和 ${deposits.length} 笔储蓄记录，并覆盖现有记录。继续?`)) return;
+        state.records = records;
+        if (deposits.length) state.savings.deposits = deposits;
+        Object.assign(state.settings, importedSettings);
+        if (importedItems.length) state.settings.insuranceItems = importedItems;
+        state.settings.insuranceItems.forEach(item => { if (item.id === 'pension') state.settings.pensionRate = item.rate; if (item.id === 'medical') state.settings.medicalRate = item.rate; if (item.id === 'unemployment') state.settings.unemploymentRate = item.rate; if (item.id === 'housing') state.settings.housingRate = item.rate; });
+        showToast('表格导入成功');
+      } catch (e) { alert(`表格导入失败:${e.message}`); }
+    };
+    reader.readAsArrayBuffer(file);
   }
   async function installApp() {
     if (!installPrompt.value) { showToast('请在浏览器菜单中选择“添加到主屏幕”'); return; }
@@ -447,8 +530,8 @@
         depDraft, openDeposit, saveDeposit, deleteDeposit,
         calYear, calMonth, calCells, calStat, calOtPay, calShift, calYearHint, calTimeoff,
         payYear, payMonth, pay, chartData, chartMax, payShift, percentStr,
-        cityList, housingPct,
-        doExport, doExportCSV, doExportXLSX, onImportFile, doClear, installApp, canInstall,
+        cityList, housingPct, setInsuranceRate, addInsurance, removeInsurance,
+        doExport, doExportCSV, doExportXLSX, onImportFile, onImportSpreadsheetFile, doClear, installApp, canInstall,
       };
     },
   }).mount('#app');

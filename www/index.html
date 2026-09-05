@@ -198,12 +198,7 @@
           <b>− ¥{{ fmtMoney(pay.social.total) }}</b>
         </div>
         <template v-if="siOpen">
-          <div class="li sub"><span>养老保险 {{ percentStr(pay.social.rates.pension) }}</span><b>¥{{ fmtMoney(pay.social.items.pension) }}</b></div>
-          <div class="li sub"><span>医疗保险 {{ percentStr(pay.social.rates.medical) }}</span><b>¥{{ fmtMoney(pay.social.items.medical) }}</b></div>
-          <div class="li sub"><span>失业保险 {{ percentStr(pay.social.rates.unemployment) }}</span><b>¥{{ fmtMoney(pay.social.items.unemployment) }}</b></div>
-          <div class="li sub"><span>工伤保险 · 单位全额缴纳</span><b>¥0</b></div>
-          <div class="li sub"><span>生育保险 · 单位全额缴纳</span><b>¥0</b></div>
-          <div class="li sub"><span>住房公积金 {{ percentStr(pay.social.rates.housing) }}</span><b>¥{{ fmtMoney(pay.social.items.housing) }}</b></div>
+          <div class="li sub" v-for="item in pay.social.itemList" :key="item.id"><span>{{ item.name }} {{ percentStr(item.rate) }}</span><b>¥{{ fmtMoney(item.amount) }}</b></div>
         </template>
         <div class="li">
           <span>个人所得税<i class="li-sub">累计应纳税所得额 ¥{{ fmtMoney(pay.cumTaxable) }} · 税率 {{ percentStr(pay.taxRate) }}</i></span>
@@ -276,6 +271,8 @@
             <option value="two">双休(周六日休)</option>
             <option value="one">单休(仅周日休)</option>
             <option value="bigsmall">大小周(单双周交替)</option>
+            <option value="shift">医护/轮班(自定义周期)</option>
+            <option value="flexible">销售/弹性(按实际记录)</option>
           </select>
         </label>
         <div class="field" v-if="state.settings.workType === 'bigsmall'">
@@ -286,6 +283,13 @@
           </span>
         </div>
         <p class="hint" v-if="state.settings.workType === 'bigsmall'">{{ thisWeekendHint || '先选择本周是大周还是小周,之后按周自动交替推算。' }}</p>
+        <div v-if="state.settings.workType === 'shift'" class="schedule-box">
+          <label class="field"><span>周期起算日</span><input type="date" v-model="state.settings.shiftAnchorDate"></label>
+          <label class="field"><span>连续上班天数</span><input type="number" min="1" max="30" v-model.number="state.settings.shiftWorkDays"></label>
+          <label class="field"><span>连续休息天数</span><input type="number" min="1" max="30" v-model.number="state.settings.shiftRestDays"></label>
+          <p class="hint">适合医护、工厂、客服等轮班人员，例如 2 天上班 + 2 天休息，请按实际班次设置。</p>
+        </div>
+        <p class="hint" v-if="state.settings.workType === 'flexible'">适合销售、外勤和弹性工作人员：默认每天可出勤，请在日历中按实际情况记录休息或请假。</p>
         <label class="field">
           <span>上班时间</span>
           <input type="time" v-model="state.settings.workTimeStart">
@@ -310,18 +314,18 @@
           <span>基数金额(元)</span>
           <input type="number" v-model.number="state.settings.sbBaseCustom" min="0" step="100">
         </label>
-        <label class="field">
-          <span>公积金比例(个人)</span>
-          <span class="range-row">
-            <input type="range" min="5" max="12" step="0.5" v-model.number="housingPct">
-            <b>{{ housingPct }}%</b>
-          </span>
-        </label>
+        <div class="insurance-list">
+          <div class="insurance-row" v-for="item in state.settings.insuranceItems" :key="item.id">
+            <input class="insurance-name" v-model="item.name" maxlength="20" :disabled="['pension','medical','unemployment','housing'].includes(item.id)">
+            <input type="number" min="0" step="0.1" :value="(Number(item.rate || 0) * 100).toFixed(2)" @change="setInsuranceRate(item, $event.target.value)">
+            <span>%</span>
+            <label class="switch"><input type="checkbox" v-model="item.enabled"><span>启用</span></label>
+            <button class="icon-btn" type="button" @click="removeInsurance(item)" :aria-label="`停用或删除${item.name}`">×</button>
+          </div>
+          <button class="btn" type="button" @click="addInsurance">＋ 自定义险种</button>
+        </div>
         <details class="adv">
-          <summary>各险种比例与基数上下限(高级)</summary>
-          <label class="field"><span>养老 %</span><input type="number" step="0.1" v-model.number="pensionPct"></label>
-          <label class="field"><span>医疗 %</span><input type="number" step="0.1" v-model.number="medicalPct"></label>
-          <label class="field"><span>失业 %</span><input type="number" step="0.1" v-model.number="unemploymentPct"></label>
+          <summary>基数上下限(高级)</summary>
           <label class="field"><span>基数下限(元)</span><input type="number" v-model.number="state.settings.sbFloor" min="0"></label>
           <label class="field"><span>基数上限(元)</span><input type="number" v-model.number="state.settings.sbCeiling" min="0"></label>
           <p class="hint">切换城市会自动重置以上参数为该城市参考值(每年约 7 月调整,以当地公布为准)。</p>
@@ -361,11 +365,13 @@
           <button class="btn" @click="doExport">导出备份</button>
           <button class="btn" @click="doExportXLSX">导出 .xlsx</button>
           <button class="btn" @click="doExportCSV">导出 Excel 表格</button>
+          <button class="btn" @click="$refs.sheetFile.click()">上传表格</button>
           <button class="btn" @click="$refs.file.click()">导入备份</button>
           <input type="file" accept=".json,application/json" ref="file" style="display:none" @change="onImportFile">
+          <input type="file" accept=".xlsx,.xls,.csv" ref="sheetFile" style="display:none" @change="onImportSpreadsheetFile">
           <button class="btn danger" @click="doClear">清空记录</button>
         </div>
-        <p class="hint">所有数据仅保存在本设备浏览器中，不会上传服务器。换设备或清理浏览器前请先导出 JSON 备份；CSV 文件可用 Excel 打开。</p>
+        <p class="hint">所有数据仅保存在本设备浏览器中，不会上传服务器。可导出 `.xlsx` 在本地修改后通过“上传表格”恢复；换设备或清理浏览器前仍请保留 JSON 备份。CSV 文件可用 Excel 打开。</p>
       </div>
 
       <p class="disclaim">打工人账本 v1.1 · 纯本地 Web 应用 · 费率参数为参考值;节假日数据依据国务院办公厅通知,内置 2025–2026,其他年份自动在线获取(holiday-cn 开源数据)。</p>

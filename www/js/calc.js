@@ -28,7 +28,7 @@
   /* ---------- 出勤类型判定 ----------
    * 返回:'holiday' 法定节假 | 'makeup' 调休上班 | 'weekend' 排班休息日 | 'workday' 工作日
    * records 中显式覆盖优先于日历推断。
-   * sched(可选):{workType:'two'|'one'|'bigsmall', anchorWeekStart, anchorType:'big'|'small'}
+   * sched(可选):{workType:'two'|'one'|'bigsmall'|'shift'|'flexible', anchorWeekStart, anchorType:'big'|'small', shiftAnchorDate, shiftWorkDays, shiftRestDays}
    *   two=双休 one=单休 bigsmall=大小周(以 anchorWeekStart 那周为锚点,单双周自动交替)
    */
   function weekStartOf(dateStr) {
@@ -51,13 +51,30 @@
       const isBig = (Math.abs(diff) % 2 === 0) ? sched.anchorType === 'big' : sched.anchorType === 'small';
       return isBig;
     }
+    if (type === 'shift') {
+      const workDays = Math.max(1, Math.floor(num(sched.shiftWorkDays) || 2));
+      const restDays = Math.max(1, Math.floor(num(sched.shiftRestDays) || 2));
+      const cycle = workDays + restDays;
+      const anchor = sched.shiftAnchorDate || '1970-01-01';
+      const diff = Math.floor((Date.parse(dateStr) - Date.parse(anchor)) / 86400000);
+      const pos = ((diff % cycle) + cycle) % cycle;
+      return pos >= workDays;
+    }
+    if (type === 'flexible') return false;
     return w === 0 || w === 6; // two(双休,默认)
   }
 
   /* 从 settings 提取排班配置(calcYear 内部自动调用) */
   function schedFromSettings(settings) {
     if (!settings || !settings.workType || settings.workType === 'two') return null;
-    return { workType: settings.workType, anchorWeekStart: settings.anchorWeekStart || '', anchorType: settings.anchorType || 'big' };
+    return {
+      workType: settings.workType,
+      anchorWeekStart: settings.anchorWeekStart || '',
+      anchorType: settings.anchorType || 'big',
+      shiftAnchorDate: settings.shiftAnchorDate || '',
+      shiftWorkDays: settings.shiftWorkDays,
+      shiftRestDays: settings.shiftRestDays,
+    };
   }
 
   function dayKind(dateStr, holidays, sched) {
@@ -111,20 +128,28 @@
     const floor = clampNum(settings.sbFloor, 0, 1e10);
     const ceiling = clampNum(settings.sbCeiling, 0, 1e10);
     const adjBase = Math.min(Math.max(base, floor), ceiling);
-    const rates = {
-      pension: num(settings.pensionRate),
-      medical: num(settings.medicalRate),
-      unemployment: num(settings.unemploymentRate),
-      housing: num(settings.housingRate),
-    };
+    const legacy = [
+      { id: 'pension', name: '养老保险', rate: settings.pensionRate },
+      { id: 'medical', name: '医疗保险', rate: settings.medicalRate },
+      { id: 'unemployment', name: '失业保险', rate: settings.unemploymentRate },
+      { id: 'housing', name: '住房公积金', rate: settings.housingRate },
+    ];
+    const configured = Array.isArray(settings.insuranceItems) && settings.insuranceItems.length
+      ? settings.insuranceItems : legacy.map(x => ({ ...x, enabled: true }));
+    const rates = {};
     const items = {};
+    const itemList = [];
     let total = 0;
-    for (const k of Object.keys(rates)) {
-      const v = adjBase * rates[k];
-      items[k] = round2(v);
+    for (const item of configured) {
+      if (!item || !item.id || item.enabled === false) continue;
+      const rate = num(item.rate);
+      const v = adjBase * rate;
+      rates[item.id] = rate;
+      items[item.id] = round2(v);
+      itemList.push({ id: item.id, name: item.name || item.id, rate, amount: round2(v) });
       total += v;
     }
-    return { base: adjBase, rates, items, total: round2(total) };
+    return { base: adjBase, rates, items, itemList, total: round2(total) };
   }
 
   /* ---------- 个税:累计预扣预缴 ---------- */

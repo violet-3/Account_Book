@@ -42,6 +42,13 @@ eq(si2.base, 6821, '基数低于下限按下限');
 eq(si2.total, 6821 * 0.225, '下限缴费金额');
 const si3 = socialInsurance(bjSettings(50000));
 eq(si3.base, 35283, '基数高于上限按上限');
+const siCustom = socialInsurance({ ...bjSettings(10000), insuranceItems: [
+  { id: 'pension', name: '养老保险', enabled: true, rate: 0.08 },
+  { id: 'medical', name: '医疗保险', enabled: false, rate: 0.02 },
+  { id: 'supplement', name: '补充保险', enabled: true, rate: 0.01 },
+] });
+eq(siCustom.total, 900, '自定义险种可独立启用并计费');
+is(siCustom.itemList.length, 2, '自定义险种动态明细');
 
 /* ---- 3. 个税累计预扣:月薪3万(北京) ---- */
 const s30k = bjSettings(30000);
@@ -122,6 +129,14 @@ is(dayKind('2026-09-12', H, { workType: 'bigsmall' }), 'weekend', '大小周未�
 is(dayKind('2026-10-10', H, bs), 'makeup', '大小周:法定调休补班日优先于排班');
 // weekStartOf
 is(calc.weekStartOf('2026-08-30'), '2026-08-24', 'weekStartOf:周日归属本周一(8/24)');
+
+/* ---- 12b. 医护轮班与弹性排班 ---- */
+const shift = { workType: 'shift', shiftAnchorDate: '2026-09-01', shiftWorkDays: 2, shiftRestDays: 2 };
+is(dayKind('2026-09-01', H, shift), 'workday', '轮班:周期第1天上班');
+is(dayKind('2026-09-02', H, shift), 'workday', '轮班:周期第2天上班');
+is(dayKind('2026-09-03', H, shift), 'weekend', '轮班:周期第3天休息');
+is(dayKind('2026-09-05', H, shift), 'workday', '轮班:下一周期第1天上班');
+is(dayKind('2026-09-06', H, { workType: 'flexible' }), 'workday', '弹性排班:周日默认可出勤');
 
 /* ---- 12. 大小周下的工资计算 ---- */
 const bsSettings = { ...s21750, workType: 'bigsmall', anchorWeekStart: '2026-08-31', anchorType: 'big' };

@@ -1,7 +1,7 @@
 {
-  "name": "打工人账本",
-  "short_name": "打工账本",
-  "description": "打工人的考勤加班记账本:记录出勤与加班,自动估算五险一金、个税与到手工资",
+  "name": "旺财 · 考勤与理财账本",
+  "short_name": "旺财",
+  "description": "旺财：记录出勤、加班与收入规划，数据仅保存在本地",
   "lang": "zh-CN",
   "start_url": "./index.html",
   "scope": "./",

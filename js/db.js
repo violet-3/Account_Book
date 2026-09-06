@@ -25,6 +25,9 @@
     sbBaseCustom: 10000,
     sbFloor: 6821,           // 缴费基数下限(随城市初始化,可改)
     sbCeiling: 35283,
+    insuranceDeductionMode: 'rate', // rate=按个人比例 | contract=按合同固定个人分摊
+    contractInsuranceTotal: 0,      // 合同约定的单位+个人五险/五险一金总额
+    contractEmployeeShare: 0.5,     // 合同约定个人分摊比例
     pensionRate: 0.08,
     medicalRate: 0.02,
     unemploymentRate: 0.005,
@@ -33,6 +36,8 @@
       { id: 'pension', name: '养老保险', enabled: true, rate: 0.08 },
       { id: 'medical', name: '医疗保险', enabled: true, rate: 0.02 },
       { id: 'unemployment', name: '失业保险', enabled: true, rate: 0.005 },
+      { id: 'work_injury', name: '工伤保险', enabled: true, rate: 0, companyOnly: true },
+      { id: 'maternity', name: '生育保险', enabled: true, rate: 0, companyOnly: true },
       { id: 'housing', name: '住房公积金', enabled: true, rate: 0.12 },
     ],
     otComp: 'pay',           // 加班补偿:'pay'加班费 | 'timeoff'调休折算 | 'none'仅记录
@@ -45,7 +50,7 @@
   function defaults() {
     return {
       version: 1,
-      settings: { ...DEFAULT_SETTINGS },
+      settings: { ...DEFAULT_SETTINGS, insuranceItems: DEFAULT_SETTINGS.insuranceItems.map(x => ({ ...x })) },
       records: {},            // 'YYYY-MM-DD': {status, ot, otType, note}
       savings: { goals: [], deposits: [] }, // 储蓄目标与存款流水
       createdAt: new Date().toISOString(),
@@ -76,6 +81,8 @@
           { id: 'pension', name: '养老保险', enabled: true, rate: Number(settings.pensionRate) || 0 },
           { id: 'medical', name: '医疗保险', enabled: true, rate: Number(settings.medicalRate) || 0 },
           { id: 'unemployment', name: '失业保险', enabled: true, rate: Number(settings.unemploymentRate) || 0 },
+          { id: 'work_injury', name: '工伤保险', enabled: true, rate: 0, companyOnly: true },
+          { id: 'maternity', name: '生育保险', enabled: true, rate: 0, companyOnly: true },
           { id: 'housing', name: '住房公积金', enabled: true, rate: Number(settings.housingRate) || 0 },
         ];
       }
@@ -139,7 +146,14 @@
 
   function normalizeInsuranceItems(items) {
     if (!Array.isArray(items) || !items.length) return DEFAULT_SETTINGS.insuranceItems.map(x => ({ ...x }));
-    return items.filter(x => x && x.id).map(x => ({ id: String(x.id), name: String(x.name || x.id), enabled: x.enabled !== false, rate: Number(x.rate) >= 0 ? Number(x.rate) : 0 }));
+    const normalized = items.filter(x => x && x.id).map(x => ({
+      id: String(x.id), name: String(x.name || x.id), enabled: x.enabled !== false,
+      rate: Number(x.rate) >= 0 ? Number(x.rate) : 0, companyOnly: x.companyOnly === true,
+    }));
+    const byId = new Map(normalized.map(x => [x.id, x]));
+    const builtin = DEFAULT_SETTINGS.insuranceItems.map(base => ({ ...base, ...(byId.get(base.id) || {}) }));
+    const custom = normalized.filter(x => !DEFAULT_SETTINGS.insuranceItems.some(base => base.id === x.id));
+    return [...builtin, ...custom];
   }
 
   function csvCell(value) {

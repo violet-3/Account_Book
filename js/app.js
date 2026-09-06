@@ -4,7 +4,7 @@
  * ========================================================= */
 (function () {
   'use strict';
-  const { createApp, reactive, ref, computed, watch } = Vue;
+  const { createApp, reactive, ref, computed, watch, nextTick } = Vue;
   const H = globalThis.HOLIDAYS;
   const CITY = globalThis.CITY_DATA;
   const C = globalThis.CALC;
@@ -365,13 +365,44 @@
   const medicalPct = pctField('medicalRate');
   const unemploymentPct = pctField('unemploymentRate');
   const cityList = computed(() => Object.entries(CITY).map(([k, v]) => ({ k, name: v.name })));
+  const WORK_TYPES = [
+    { value: 'two', label: '双休', note: '周六、周日休' },
+    { value: 'one', label: '单休', note: '仅周日休' },
+    { value: 'bigsmall', label: '大小周', note: '单双周交替' },
+    { value: 'shift', label: '医护轮班', note: '按周期排班' },
+    { value: 'flexible', label: '销售弹性', note: '按实际记录' },
+  ];
   const hourOptions = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
   const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
   const timePicker = reactive({ open: false, target: 'start', hour: '09', minute: '00' });
+  const hourWheel = ref(null);
+  const minuteWheel = ref(null);
+  function scrollWheelTo(kind, value) {
+    const wheel = kind === 'hour' ? hourWheel.value : minuteWheel.value;
+    if (!wheel) return;
+    const option = wheel.querySelector(`[data-value="${value}"]`);
+    if (!option) return;
+    wheel.scrollTop = option.offsetTop - (wheel.clientHeight - option.offsetHeight) / 2;
+  }
   function openTimePicker(target) {
     const value = target === 'start' ? state.settings.workTimeStart : state.settings.workTimeEnd;
     const [hour, minute] = String(value || (target === 'start' ? '09:00' : '18:00')).split(':');
     Object.assign(timePicker, { open: true, target, hour: hourOptions.includes(hour) ? hour : '00', minute: minuteOptions.includes(minute) ? minute : '00' });
+    nextTick(() => { scrollWheelTo('hour', timePicker.hour); scrollWheelTo('minute', timePicker.minute); });
+  }
+  function syncWheelValue(kind, event) {
+    const wheel = event.currentTarget;
+    const center = wheel.scrollTop + wheel.clientHeight / 2;
+    let closest = null, distance = Infinity;
+    wheel.querySelectorAll('[data-value]').forEach(option => {
+      const gap = Math.abs(option.offsetTop + option.offsetHeight / 2 - center);
+      if (gap < distance) { closest = option; distance = gap; }
+    });
+    if (closest) timePicker[kind] = closest.dataset.value;
+  }
+  function chooseWheelValue(kind, value) {
+    timePicker[kind] = value;
+    nextTick(() => scrollWheelTo(kind, value));
   }
   function saveTimePicker() {
     const value = `${timePicker.hour}:${timePicker.minute}`;
@@ -388,6 +419,35 @@
     const totalRate = enabled.reduce((sum, item) => sum + (Number(item.rate) || 0), 0);
     return `${enabled.length} 项启用 · 合计 ${Math.round(totalRate * 10000) / 100}%`;
   });
+  const insuranceTitle = computed(() => {
+    const housing = (state.settings.insuranceItems || []).find(item => item.id === 'housing');
+    return housing && housing.enabled !== false ? '五险一金' : '五险（无公积金）';
+  });
+  const socialDeductionInfo = computed(() => {
+    const social = C.socialInsurance(effSettings.value);
+    return {
+      ratePersonal: social.rateTotal,
+      contractTotal: social.contractTotal,
+      contractPersonal: social.contractPersonal,
+      current: social.total,
+      mode: social.deductionMode,
+    };
+  });
+  function setHousingEnabled(enabled) {
+    const housing = (state.settings.insuranceItems || []).find(item => item.id === 'housing');
+    if (housing) housing.enabled = enabled;
+  }
+  const socialBaseInfo = computed(() => {
+    const source = Number(effSettings.value.sbBase) || 0;
+    const floor = Number(effSettings.value.sbFloor) || 0;
+    const ceiling = Number(effSettings.value.sbCeiling) || 0;
+    const actual = C.socialInsurance(effSettings.value).base;
+    let reason = '按填写的缴费基数计算';
+    if (source < floor) reason = '低于下限，按下限计算';
+    else if (source > ceiling) reason = '高于上限，按上限计算';
+    return { source, floor, ceiling, actual, reason };
+  });
+  function isCompanyOnlyInsurance(item) { return item.companyOnly === true || ['work_injury', 'maternity'].includes(item.id); }
   function setInsuranceRate(item, value) {
     item.rate = Math.max(0, Number(value) || 0) / 100;
     if (item.id === 'pension') state.settings.pensionRate = item.rate;
@@ -548,8 +608,8 @@
         depDraft, openDeposit, saveDeposit, deleteDeposit,
         calYear, calMonth, calCells, calStat, calHasRecords, calOtPay, calShift, calYearHint, calTimeoff,
         payYear, payMonth, pay, payRecordedDays, hasYearRecords, chartData, chartMax, payShift, percentStr,
-        cityList, hourOptions, minuteOptions, timePicker, openTimePicker, saveTimePicker,
-        housingPct, insuranceSummary, setInsuranceRate, addInsurance, removeInsurance,
+        cityList, WORK_TYPES, hourOptions, minuteOptions, timePicker, hourWheel, minuteWheel, openTimePicker, syncWheelValue, chooseWheelValue, saveTimePicker,
+        housingPct, insuranceSummary, insuranceTitle, socialDeductionInfo, socialBaseInfo, isCompanyOnlyInsurance, setHousingEnabled, setInsuranceRate, addInsurance, removeInsurance,
         doExport, doExportCSV, doExportXLSX, onImportFile, onImportSpreadsheetFile, doClear,
       };
     },

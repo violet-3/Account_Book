@@ -37,6 +37,12 @@ const bjSettings = (base) => ({
 
 const si1 = socialInsurance(bjSettings(10000));
 eq(si1.total, 2250, '北京月薪1万社保=(8+2+0.5+12)%=2250');
+is(si1.itemList.length, 6, '五险一金完整显示六个项目');
+is(si1.itemList.find(x => x.id === 'work_injury').companyOnly, true, '工伤保险默认标记为单位缴纳');
+const siContract = socialInsurance({ ...bjSettings(10000), insuranceDeductionMode: 'contract', contractInsuranceTotal: 1700, contractEmployeeShare: 0.5 });
+eq(siContract.rateTotal, 2250, '个人比例口径保留用于核对');
+eq(siContract.contractPersonal, 850, '合同1700元且个人各半=850');
+eq(siContract.total, 850, '合同固定分摊模式用于工资扣款');
 const si2 = socialInsurance(bjSettings(5000));
 eq(si2.base, 6821, '基数低于下限按下限');
 eq(si2.total, 6821 * 0.225, '下限缴费金额');

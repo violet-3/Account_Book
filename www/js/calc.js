@@ -132,6 +132,8 @@
       { id: 'pension', name: '养老保险', rate: settings.pensionRate },
       { id: 'medical', name: '医疗保险', rate: settings.medicalRate },
       { id: 'unemployment', name: '失业保险', rate: settings.unemploymentRate },
+      { id: 'work_injury', name: '工伤保险', rate: 0, companyOnly: true },
+      { id: 'maternity', name: '生育保险', rate: 0, companyOnly: true },
       { id: 'housing', name: '住房公积金', rate: settings.housingRate },
     ];
     const configured = Array.isArray(settings.insuranceItems) && settings.insuranceItems.length
@@ -139,17 +141,22 @@
     const rates = {};
     const items = {};
     const itemList = [];
-    let total = 0;
+    let rateTotal = 0;
     for (const item of configured) {
       if (!item || !item.id || item.enabled === false) continue;
       const rate = num(item.rate);
       const v = adjBase * rate;
       rates[item.id] = rate;
       items[item.id] = round2(v);
-      itemList.push({ id: item.id, name: item.name || item.id, rate, amount: round2(v) });
-      total += v;
+      itemList.push({ id: item.id, name: item.name || item.id, rate, amount: round2(v), companyOnly: item.companyOnly === true });
+      rateTotal += v;
     }
-    return { base: adjBase, rates, items, itemList, total: round2(total) };
+    const contractTotal = Math.max(0, num(settings.contractInsuranceTotal));
+    const employeeShare = Math.min(1, Math.max(0, num(settings.contractEmployeeShare) || 0));
+    const contractPersonal = round2(contractTotal * employeeShare);
+    const deductionMode = settings.insuranceDeductionMode === 'contract' && contractTotal > 0 ? 'contract' : 'rate';
+    const total = deductionMode === 'contract' ? contractPersonal : round2(rateTotal);
+    return { base: adjBase, rates, items, itemList, rateTotal: round2(rateTotal), contractTotal: round2(contractTotal), contractPersonal, deductionMode, total };
   }
 
   /* ---------- 个税:累计预扣预缴 ---------- */

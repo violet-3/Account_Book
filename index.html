@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-  <title>打工人账本 · 考勤加班与工资</title>
-  <meta name="description" content="打工人的考勤加班记账本:记录出勤与加班,自动估算五险一金、个税与到手工资。数据保存在本地。">
+  <title>旺财 · 考勤、工资与攒钱</title>
+  <meta name="description" content="旺财：记录出勤、加班与收入规划，让每一次认真生活都有账可查。数据仅保存在本地。">
   <meta name="theme-color" content="#4f46e5">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
@@ -23,6 +23,10 @@
     </div>
     <!-- ============ 今日打卡 ============ -->
     <section v-show="page==='today'" class="page-today">
+      <div class="brand-kicker" aria-label="旺财，记工理财旺生活">
+        <span class="brand-seal">旺</span>
+        <span><b>旺财</b><small>记工 · 理财 · 旺生活</small></span>
+      </div>
       <p class="page-context">{{ todayStr }} · 今天是{{ todayKindLabel }}<template v-if="todayHolidayName"> · {{ todayHolidayName }}</template></p>
 
       <div class="card worktime">
@@ -176,11 +180,11 @@
           <span>应发工资</span><b>¥{{ fmtMoney(pay.gross) }}</b>
         </div>
         <div class="li" @click="siOpen = !siOpen" style="cursor:pointer">
-          <span>五险一金<i class="li-sub">{{ cityName }} · 缴费基数 ¥{{ fmtMoney(pay.social.base) }} ▾</i></span>
+          <span>{{ insuranceTitle }}<i class="li-sub">{{ cityName }} · 缴费基数 ¥{{ fmtMoney(pay.social.base) }} · {{ pay.social.deductionMode === 'contract' ? '按合同个人分摊' : '按个人比例' }} ▾</i></span>
           <b>− ¥{{ fmtMoney(pay.social.total) }}</b>
         </div>
         <template v-if="siOpen">
-          <div class="li sub" v-for="item in pay.social.itemList" :key="item.id"><span>{{ item.name }} {{ percentStr(item.rate) }}</span><b>¥{{ fmtMoney(item.amount) }}</b></div>
+          <div class="li sub" v-for="item in pay.social.itemList" :key="item.id"><span>{{ item.name }} {{ percentStr(item.rate) }}<i class="li-sub" v-if="item.companyOnly && item.rate === 0">默认由单位缴纳，个人不扣款</i></span><b>{{ item.amount > 0 ? '− ' : '' }}¥{{ fmtMoney(item.amount) }}</b></div>
         </template>
         <div class="li">
           <span>个人所得税<i class="li-sub">累计应纳税所得额 ¥{{ fmtMoney(pay.cumTaxable) }} · 税率 {{ percentStr(pay.taxRate) }}</i></span>
@@ -193,13 +197,17 @@
       </div>
 
       <details class="card calc-detail">
-        <summary>计算过程</summary>
+        <summary>预估工资计算过程 <small>可按参数核对</small></summary>
         <div class="cd-body">
-          <p>日薪 = 月薪 ÷ 21.75 = <b>¥{{ fmtMoney(pay.dailyWage) }}</b></p>
-          <p>时薪 = 日薪 ÷ 8 = <b>¥{{ fmtMoney(pay.hourlyWage) }}</b></p>
-          <p>加班费 = 时薪 ×（工作日 {{ pay.otHours.workday }}h × {{ percentStr(effSettings.otRateWorkday) }} + 周末 {{ pay.otHours.weekend }}h × {{ percentStr(effSettings.otRateWeekend) }} + 节假日 {{ pay.otHours.holiday }}h × {{ percentStr(effSettings.otRateHoliday) }}）</p>
-          <p>本月应纳税所得额 = 应发 − 五险一金 − 5000 起征 − 专项附加扣除</p>
-          <p>个税按<b>累计预扣预缴法</b>:年初至本月累计应纳税所得额 ¥{{ fmtMoney(pay.cumTaxable) }},适用税率 {{ percentStr(pay.taxRate) }},减去前几个月已缴。</p>
+          <p><b>① 应发</b> = 月薪 ¥{{ fmtMoney(effSettings.baseSalary) }} + 补贴 ¥{{ fmtMoney(pay.allowance) }} + 加班 ¥{{ fmtMoney(pay.otPay) }} − 缺勤 ¥{{ fmtMoney(pay.deduction) }} = <b>¥{{ fmtMoney(pay.gross) }}</b></p>
+          <p>日薪 = 月薪 ÷ 21.75 = ¥{{ fmtMoney(pay.dailyWage) }}；时薪 = 日薪 ÷ 8 = ¥{{ fmtMoney(pay.hourlyWage) }}</p>
+          <p v-if="effSettings.otComp === 'pay'">加班费 = 时薪 ×（工作日 {{ pay.otHours.workday }}h × {{ percentStr(effSettings.otRateWorkday) }} + 周末 {{ pay.otHours.weekend }}h × {{ percentStr(effSettings.otRateWeekend) }} + 节假日 {{ pay.otHours.holiday }}h × {{ percentStr(effSettings.otRateHoliday) }}）= ¥{{ fmtMoney(pay.otPay) }}</p>
+          <p v-else>当前加班补偿设置为「{{ effSettings.otComp === 'timeoff' ? '调休，不计入工资' : '仅记录，不计补偿' }}」。</p>
+          <p v-if="pay.social.deductionMode === 'rate'"><b>② {{ insuranceTitle }}</b> = 缴费基数 ¥{{ fmtMoney(pay.social.base) }} × 已启用个人比例 = <b>¥{{ fmtMoney(pay.social.total) }}</b></p>
+          <p v-else><b>② {{ insuranceTitle }}</b> = 合同总额 ¥{{ fmtMoney(pay.social.contractTotal) }} × 个人 {{ percentStr(state.settings.contractEmployeeShare) }} = <b>¥{{ fmtMoney(pay.social.total) }}</b>（各险种比例仍保留用于核对）</p>
+          <p><b>③ 个税</b>：累计应纳税所得额 = ¥{{ fmtMoney(pay.cumTaxable) }}，适用 {{ percentStr(pay.taxRate) }} 税率；本月预扣 <b>¥{{ fmtMoney(pay.tax) }}</b>。</p>
+          <p><b>④ 到手</b> = 应发 ¥{{ fmtMoney(pay.gross) }} − 五险一金 ¥{{ fmtMoney(pay.social.total) }} − 个税 ¥{{ fmtMoney(pay.tax) }} = <b>¥{{ fmtMoney(pay.net) }}</b></p>
+          <button class="text-link" type="button" @click="page = 'settings'">去设置调整月薪、排班、险种比例和扣除项 →</button>
         </div>
       </details>
       </template>
@@ -244,16 +252,14 @@
 
       <div class="card">
         <div class="card-title">排班与工时</div>
-        <label class="field">
+        <div class="work-type-field">
           <span>工作制</span>
-          <select v-model="state.settings.workType">
-            <option value="two">双休(周六日休)</option>
-            <option value="one">单休(仅周日休)</option>
-            <option value="bigsmall">大小周(单双周交替)</option>
-            <option value="shift">医护/轮班(自定义周期)</option>
-            <option value="flexible">销售/弹性(按实际记录)</option>
-          </select>
-        </label>
+          <div class="work-type-grid" role="group" aria-label="工作制">
+            <button type="button" v-for="type in WORK_TYPES" :key="type.value" :class="{ on: state.settings.workType === type.value }" :aria-pressed="state.settings.workType === type.value" @click="state.settings.workType = type.value">
+              <b>{{ type.label }}</b><small>{{ type.note }}</small>
+            </button>
+          </div>
+        </div>
         <div class="field" v-if="state.settings.workType === 'bigsmall'">
           <span>本周是</span>
           <span class="chips small">
@@ -281,7 +287,11 @@
       </div>
 
       <div class="card">
-        <div class="card-title">五险一金(个人部分)</div>
+        <div class="card-title">{{ insuranceTitle }} <small>含单位全额缴纳项目</small></div>
+        <div class="housing-choice" role="group" aria-label="是否缴纳住房公积金">
+          <button type="button" :class="{ on: insuranceTitle === '五险一金' }" @click="setHousingEnabled(true)">含公积金</button>
+          <button type="button" :class="{ on: insuranceTitle !== '五险一金' }" @click="setHousingEnabled(false)">仅五险（无公积金）</button>
+        </div>
         <label class="field">
           <span>缴费基数</span>
           <select v-model="state.settings.sbBaseMode">
@@ -293,11 +303,29 @@
           <span>基数金额(元)</span>
           <input type="number" v-model.number="state.settings.sbBaseCustom" min="0" step="100">
         </label>
+        <label class="field">
+          <span>个人扣款依据</span>
+          <select v-model="state.settings.insuranceDeductionMode">
+            <option value="rate">按各险种个人比例</option>
+            <option value="contract">按合同固定个人分摊</option>
+          </select>
+        </label>
+        <details class="contract-details">
+          <summary>合同金额核对 <small>不确定时按实际工资条</small></summary>
+          <label class="field"><span>合同约定总额(元)</span><input type="number" v-model.number="state.settings.contractInsuranceTotal" min="0" step="10" placeholder="如：1700"></label>
+          <label class="field"><span>个人分摊比例(%)</span><input type="number" :value="Math.round((Number(state.settings.contractEmployeeShare || 0) * 10000) / 100)" @change="state.settings.contractEmployeeShare = Math.min(100, Math.max(0, Number($event.target.value) || 0)) / 100" min="0" max="100" step="1"></label>
+          <p class="contract-compare">合同口径：总额 ¥{{ fmtMoney(socialDeductionInfo.contractTotal) }} × 个人 {{ percentStr(state.settings.contractEmployeeShare) }} = <b>¥{{ fmtMoney(socialDeductionInfo.contractPersonal) }}</b></p>
+          <p class="contract-compare">比例口径：已启用险种按个人比例计算 = <b>¥{{ fmtMoney(socialDeductionInfo.ratePersonal) }}</b></p>
+          <p class="hint">{{ socialDeductionInfo.mode === 'contract' ? '当前工资估算使用合同个人分摊金额。' : '当前工资估算按个人缴费比例计算；合同金额仅用于核对。' }}</p>
+        </details>
         <details class="compact-details">
           <summary>险种与比例 <small>{{ insuranceSummary }}</small></summary>
           <div class="insurance-list">
             <div class="insurance-row" v-for="item in state.settings.insuranceItems" :key="item.id">
-              <input class="insurance-name" v-model="item.name" maxlength="20" :disabled="['pension','medical','unemployment','housing'].includes(item.id)">
+              <template v-if="['pension','medical','unemployment','work_injury','maternity','housing'].includes(item.id)">
+                <span class="insurance-name static">{{ item.name }}<small v-if="isCompanyOnlyInsurance(item)">默认单位缴纳</small></span>
+              </template>
+              <input v-else class="insurance-name" v-model="item.name" maxlength="20">
               <input type="number" min="0" step="0.1" :value="(Number(item.rate || 0) * 100).toFixed(2)" @change="setInsuranceRate(item, $event.target.value)">
               <span>%</span>
               <label class="switch"><input type="checkbox" v-model="item.enabled"><span>启用</span></label>
@@ -309,6 +337,8 @@
             <summary>缴费基数上下限</summary>
             <label class="field"><span>基数下限(元)</span><input type="number" v-model.number="state.settings.sbFloor" min="0"></label>
             <label class="field"><span>基数上限(元)</span><input type="number" v-model.number="state.settings.sbCeiling" min="0"></label>
+            <p class="hint">缴费基数是用于计算五险一金的工资金额，不一定等于实际月薪。低于下限时按下限缴，超过上限时按上限缴。</p>
+            <p class="base-explain">当前：原始基数 ¥{{ fmtMoney(socialBaseInfo.source) }} · 范围 ¥{{ fmtMoney(socialBaseInfo.floor) }}–¥{{ fmtMoney(socialBaseInfo.ceiling) }} · 实际按 <b>¥{{ fmtMoney(socialBaseInfo.actual) }}</b>（{{ socialBaseInfo.reason }}）</p>
             <p class="hint">切换城市会自动重置以上参数为该城市参考值。</p>
           </details>
         </details>
@@ -425,16 +455,20 @@
       <div class="wheel-picker">
         <label>
           <span>小时</span>
-          <select size="5" v-model="timePicker.hour">
-            <option v-for="hour in hourOptions" :key="hour" :value="hour">{{ hour }}</option>
-          </select>
+          <div class="wheel-column">
+            <div class="wheel-scroller" ref="hourWheel" @scroll="syncWheelValue('hour', $event)">
+              <button type="button" v-for="hour in hourOptions" :key="hour" :data-value="hour" :class="{ 'is-selected': timePicker.hour === hour }" @click="chooseWheelValue('hour', hour)">{{ hour }}</button>
+            </div>
+          </div>
         </label>
         <i>:</i>
         <label>
           <span>分钟</span>
-          <select size="5" v-model="timePicker.minute">
-            <option v-for="minute in minuteOptions" :key="minute" :value="minute">{{ minute }}</option>
-          </select>
+          <div class="wheel-column">
+            <div class="wheel-scroller" ref="minuteWheel" @scroll="syncWheelValue('minute', $event)">
+              <button type="button" v-for="minute in minuteOptions" :key="minute" :data-value="minute" :class="{ 'is-selected': timePicker.minute === minute }" @click="chooseWheelValue('minute', minute)">{{ minute }}</button>
+            </div>
+          </div>
         </label>
       </div>
       <div class="time-preview">{{ timePicker.hour }}:{{ timePicker.minute }}</div>
@@ -543,6 +577,7 @@
   </transition>
 
   <nav class="tabbar">
+    <div class="nav-brand" aria-label="旺财"><span class="brand-seal">旺</span><span><b>旺财</b><small>记工 · 理财 · 旺生活</small></span></div>
     <button :class="{ on: page === 'today' }" @click="page = 'today'">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
       <span>今日</span>

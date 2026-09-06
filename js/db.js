@@ -45,6 +45,8 @@
     otRateWeekend: 2,
     otRateHoliday: 3,
     specialDeduction: 0,     // 每月专项附加扣除合计
+    taxCarryTaxable: 0,      // 开始记账前已知的累计应纳税所得额
+    taxCarryPaid: 0,         // 开始记账前已预缴个税
   };
 
   function defaults() {

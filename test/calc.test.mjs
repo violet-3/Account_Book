@@ -58,7 +58,8 @@ is(siCustom.itemList.length, 2, '自定义险种动态明细');
 
 /* ---- 3. 个税累计预扣:月薪3万(北京) ---- */
 const s30k = bjSettings(30000);
-const y30k = calcYear(2026, s30k, {}, H);
+const fullYearRecords = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`2026-${String(index + 1).padStart(2, '0')}-01`, { status: 'work', ot: 0 }]));
+const y30k = calcYear(2026, s30k, fullYearRecords, H);
 eq(y30k.months[0].tax, 547.5, '1月个税 18250*3%');
 eq(y30k.months[1].tax, 582.5, '2月跳档 36500*10%-2520-547.5');
 eq(y30k.months[8].tax, 3650, '9月跳20%档:15930-12280');
@@ -67,12 +68,20 @@ eq(y30k.months[11].cumTaxable, 219000, '全年累计应纳税所得额');
 const totalTax = y30k.months.reduce((a, m) => a + m.tax, 0);
 eq(totalTax, 26880, '全年个税合计=速算表验证值');
 
-/* ---- 4. 无记录月份=全勤估算:月薪1万北京 ---- */
-const y10k = calcYear(2026, bjSettings(10000), {}, H);
+/* ---- 4. 已记录月份按全勤估算:月薪1万北京 ---- */
+const y10k = calcYear(2026, bjSettings(10000), fullYearRecords, H);
 const aug = y10k.months[7];
 eq(aug.gross, 10000, '8月应发(全勤无加班)');
 eq(aug.tax, 82.5, '8月个税恒定2750*3%');
 eq(aug.net, 10000 - 2250 - 82.5, '8月实发');
+
+/* ---- 4b. 未记录月份不虚构累计个税，可用工资条累计数校准 ---- */
+const yPartial = calcYear(2026, bjSettings(10000), { '2026-09-01': { status: 'work', ot: 0 } }, H);
+eq(yPartial.months[8].cumTaxableBefore, 0, '中途开始记账前未知月份不计入累计');
+eq(yPartial.months[8].cumTaxable, 2750, '首个已记录月只累计本月应纳税所得额');
+const yCarry = calcYear(2026, { ...bjSettings(10000), taxCarryTaxable: 22000, taxCarryPaid: 660 }, { '2026-09-01': { status: 'work', ot: 0 } }, H);
+eq(yCarry.months[8].cumTaxableBefore, 22000, '工资条累计应纳税所得额作为校准起点');
+eq(yCarry.months[8].tax, 82.5, '工资条累计已缴个税参与本月预扣');
 
 /* ---- 5. 加班费:月薪21750 → 时薪125 ---- */
 const s21750 = bjSettings(21750);

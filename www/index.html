@@ -205,7 +205,7 @@
           <p v-else>当前加班补偿设置为「{{ effSettings.otComp === 'timeoff' ? '调休，不计入工资' : '仅记录，不计补偿' }}」。</p>
           <p v-if="pay.social.deductionMode === 'rate'"><b>② {{ insuranceTitle }}</b> = 缴费基数 ¥{{ fmtMoney(pay.social.base) }} × 已启用个人比例 = <b>¥{{ fmtMoney(pay.social.total) }}</b></p>
           <p v-else><b>② {{ insuranceTitle }}</b> = 合同总额 ¥{{ fmtMoney(pay.social.contractTotal) }} × 个人 {{ percentStr(state.settings.contractEmployeeShare) }} = <b>¥{{ fmtMoney(pay.social.total) }}</b>（各险种比例仍保留用于核对）</p>
-          <p><b>③ 个税</b>：累计应纳税所得额 = ¥{{ fmtMoney(pay.cumTaxable) }}，适用 {{ percentStr(pay.taxRate) }} 税率；本月预扣 <b>¥{{ fmtMoney(pay.tax) }}</b>。</p>
+          <p><b>③ 个税</b>：本月应纳税所得额 ¥{{ fmtMoney(pay.taxableThisMonth) }}；记账前及已记录月份累计 ¥{{ fmtMoney(pay.cumTaxableBefore) }}，本月后累计 = ¥{{ fmtMoney(pay.cumTaxable) }}，适用 {{ percentStr(pay.taxRate) }} 税率；本月预扣 <b>¥{{ fmtMoney(pay.tax) }}</b>。</p>
           <p><b>④ 到手</b> = 应发 ¥{{ fmtMoney(pay.gross) }} − 五险一金 ¥{{ fmtMoney(pay.social.total) }} − 个税 ¥{{ fmtMoney(pay.tax) }} = <b>¥{{ fmtMoney(pay.net) }}</b></p>
           <button class="text-link" type="button" @click="page = 'settings'">去设置调整月薪、排班、险种比例和扣除项 →</button>
         </div>
@@ -371,6 +371,12 @@
           <input type="number" v-model.number="state.settings.specialDeduction" min="0" step="100">
         </label>
         <p class="hint">如子女教育、房贷利息、赡养老人、房租等,按每月可扣除总额填写。</p>
+        <details class="tax-carry-details">
+          <summary>累计个税校准 <small>开始记账前的数据（可选）</small></summary>
+          <label class="field"><span>已知累计应纳税所得额(元)</span><input type="number" v-model.number="state.settings.taxCarryTaxable" step="100" placeholder="按工资条填写"></label>
+          <label class="field"><span>已预缴个税(元)</span><input type="number" v-model.number="state.settings.taxCarryPaid" min="0" step="10" placeholder="按工资条填写"></label>
+          <p class="hint">没有前几个月记录时，系统不会把它们当作已发薪。若工资条已给出累计数，填在这里可让预扣个税更接近实际。</p>
+        </details>
       </div>
 
       <details class="card settings-card">

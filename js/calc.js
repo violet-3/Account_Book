@@ -176,7 +176,8 @@
   function round2(v) { return Math.round(v * 100) / 100; }
 
   /* 计算某年 1-12 月的工资明细(累计预扣法需要从 1 月起逐月累计)。
-   * 无考勤记录的月份按"全勤"估算;排班制度(workType 等)取自 settings。
+   * 无考勤记录的月份仍可估算工资，但不计入累计个税；避免用户中途开始记账时把未知月份当作已发薪。
+   * 可用 taxCarryTaxable / taxCarryPaid 录入开始记账前的工资条累计数。
    * 返回 { months: [ {key, label, ...明细} ] }
    */
   function calcYear(year, settings, records, holidays) {
@@ -196,8 +197,8 @@
     const threshold = num(settings.taxThreshold) || 5000;
     const special = num(settings.specialDeduction);
 
-    let cumTaxable = 0;      // 年初至今累计应纳税所得额
-    let cumTax = 0;          // 年初至今累计已缴个税
+    let cumTaxable = num(settings.taxCarryTaxable); // 开始记账前 + 已记录月份的累计应纳税所得额
+    let cumTax = num(settings.taxCarryPaid);         // 开始记账前 + 已记录月份的累计已缴个税
     const months = [];
 
     for (let m = 1; m <= 12; m++) {
@@ -231,9 +232,14 @@
       const deduction = unpaid * daily;
       const gross = base + allowance + otPay - deduction;
       const taxableThisMonth = gross - si.total - threshold - special;
-      cumTaxable += taxableThisMonth;
-      const taxMonth = Math.max(0, annualTax(cumTaxable) - cumTax);
-      cumTax += taxMonth;
+      const cumTaxableBefore = cumTaxable;
+      const taxPaidBefore = cumTax;
+      let taxMonth = 0;
+      if (recorded) {
+        cumTaxable += taxableThisMonth;
+        taxMonth = Math.max(0, annualTax(cumTaxable) - cumTax);
+        cumTax += taxMonth;
+      }
       const net = gross - si.total - taxMonth;
 
       months.push({
@@ -251,6 +257,9 @@
         gross: round2(gross),
         social: si,
         tax: round2(taxMonth),
+        taxableThisMonth: round2(taxableThisMonth),
+        cumTaxableBefore: round2(cumTaxableBefore),
+        taxPaidBefore: round2(taxPaidBefore),
         cumTaxable: round2(cumTaxable),
         taxRate: taxRateOf(cumTaxable),
         net: round2(net),

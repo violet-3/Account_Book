@@ -753,6 +753,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .contract-details > summary small { color: var(--text-3); font-size: .68rem; font-weight: 400; }
 .contract-compare { margin-top: 7px; padding: 7px 9px; border-radius: 9px; background: var(--bg); color: var(--text-2); font-size: .74rem; line-height: 1.55; }
 .contract-compare b { color: var(--text); font-variant-numeric: tabular-nums; }
+.tax-carry-details { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 2px; }
+.tax-carry-details > summary { cursor: pointer; list-style: none; color: var(--brand); font-size: .84rem; min-height: 38px; display: flex; align-items: center; gap: 8px; }
+.tax-carry-details > summary::-webkit-details-marker { display: none; }
+.tax-carry-details > summary::after { content: '⌄'; margin-left: auto; color: var(--text-3); transition: transform .16s ease; }
+.tax-carry-details[open] > summary::after { transform: rotate(180deg); }
+.tax-carry-details > summary small { color: var(--text-3); font-size: .68rem; font-weight: 400; }
 .page-settings .card { padding: 13px 16px; margin-bottom: 10px; }
 .page-settings .card-title { margin-bottom: 6px; }
 .compact-details, .nested-details { border-top: 1px solid var(--line); margin-top: 7px; padding-top: 2px; }

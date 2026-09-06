@@ -1,5 +1,5 @@
 /* sw.js — 离线缓存:network-first(保证更新及时),离线时回退缓存 */
-const CACHE = 'wangcai-v11-tax-carry';
+const CACHE = 'wangcai-v12-theme-picker';
 const ASSETS = [
   './',
   './index.html',

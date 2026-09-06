@@ -240,9 +240,7 @@
         </label>
         <label class="field">
           <span>工作城市</span>
-          <select v-model="state.settings.city" @change="applyCity(state.settings.city)">
-            <option v-for="c in cityList" :key="c.k" :value="c.k">{{ c.name }}</option>
-          </select>
+          <button type="button" class="select-trigger" :aria-expanded="choicePicker.open && choicePicker.field === 'city'" aria-haspopup="listbox" @click="openChoicePicker('city')"><b>{{ optionLabel('city', state.settings.city) }}</b><i>⌄</i></button>
         </label>
         <label class="field" v-if="state.settings.city === 'custom'">
           <span>城市名称</span>
@@ -254,20 +252,14 @@
         <div class="card-title">排班与工时</div>
         <label class="field work-type-field">
           <span>工作制</span>
-          <select v-model="state.settings.workType" class="work-type-select">
-            <option value="two">双休（周六、周日休）</option>
-            <option value="one">单休（仅周日休）</option>
-            <option value="bigsmall">大小周（单双周交替）</option>
-            <option value="shift">医护轮班（按周期排班）</option>
-            <option value="flexible">销售弹性（按实际记录）</option>
-          </select>
+          <button type="button" class="select-trigger" :aria-expanded="choicePicker.open && choicePicker.field === 'workType'" aria-haspopup="listbox" @click="openChoicePicker('workType')"><b>{{ optionLabel('workType', state.settings.workType) }}</b><i>⌄</i></button>
         </label>
-        <div class="field" v-if="state.settings.workType === 'bigsmall'">
+        <div class="week-type-field" v-if="state.settings.workType === 'bigsmall'">
           <span>本周是</span>
-          <span class="chips small">
-            <button class="chip" :class="{ on: state.settings.anchorType === 'big' }" @click="setAnchor('big')">大周(双休)</button>
-            <button class="chip" :class="{ on: state.settings.anchorType === 'small' }" @click="setAnchor('small')">小周(单休)</button>
-          </span>
+          <div class="week-type-choice" role="group" aria-label="本周排班类型">
+            <button type="button" :class="{ on: state.settings.anchorType === 'big' }" :aria-pressed="state.settings.anchorType === 'big'" @click="setAnchor('big')"><b>大周</b><small>周六日双休</small></button>
+            <button type="button" :class="{ on: state.settings.anchorType === 'small' }" :aria-pressed="state.settings.anchorType === 'small'" @click="setAnchor('small')"><b>小周</b><small>仅周日休息</small></button>
+          </div>
         </div>
         <p class="hint" v-if="state.settings.workType === 'bigsmall'">{{ thisWeekendHint || '先选择本周是大周还是小周,之后按周自动交替推算。' }}</p>
         <div v-if="state.settings.workType === 'shift'" class="schedule-box">
@@ -296,10 +288,7 @@
         </div>
         <label class="field">
           <span>缴费基数</span>
-          <select v-model="state.settings.sbBaseMode">
-            <option value="salary">按月薪基数</option>
-            <option value="custom">手动指定</option>
-          </select>
+          <button type="button" class="select-trigger" :aria-expanded="choicePicker.open && choicePicker.field === 'sbBaseMode'" aria-haspopup="listbox" @click="openChoicePicker('sbBaseMode')"><b>{{ optionLabel('sbBaseMode', state.settings.sbBaseMode) }}</b><i>⌄</i></button>
         </label>
         <label class="field" v-if="state.settings.sbBaseMode === 'custom'">
           <span>基数金额(元)</span>
@@ -307,10 +296,7 @@
         </label>
         <label class="field">
           <span>个人扣款依据</span>
-          <select v-model="state.settings.insuranceDeductionMode">
-            <option value="rate">按各险种个人比例</option>
-            <option value="contract">按合同固定个人分摊</option>
-          </select>
+          <button type="button" class="select-trigger" :aria-expanded="choicePicker.open && choicePicker.field === 'insuranceDeductionMode'" aria-haspopup="listbox" @click="openChoicePicker('insuranceDeductionMode')"><b>{{ optionLabel('insuranceDeductionMode', state.settings.insuranceDeductionMode) }}</b><i>⌄</i></button>
         </label>
         <details class="contract-details">
           <summary>合同金额核对 <small>不确定时按实际工资条</small></summary>
@@ -350,11 +336,7 @@
         <div class="card-title">加班补偿</div>
         <label class="field">
           <span>补偿方式</span>
-          <select v-model="state.settings.otComp">
-            <option value="pay">按法定倍率折算加班费</option>
-            <option value="timeoff">调休(按倍率折算可休时长,不发钱)</option>
-            <option value="none">仅记录,不计补偿</option>
-          </select>
+          <button type="button" class="select-trigger" :aria-expanded="choicePicker.open && choicePicker.field === 'otComp'" aria-haspopup="listbox" @click="openChoicePicker('otComp')"><b>{{ optionLabel('otComp', state.settings.otComp) }}</b><i>⌄</i></button>
         </label>
         <details class="adv" v-if="state.settings.otComp !== 'none'">
           <summary>自定义倍率(加班费与调休折算共用)</summary>
@@ -456,6 +438,20 @@
     </section>
   </main>
 
+  <!-- 通用主题选择面板：替代系统下拉框，城市支持筛选 -->
+  <div class="mask" v-if="choicePicker.open" @click.self="choicePicker.open = false">
+    <div class="sheet choice-sheet" role="dialog" aria-modal="true" aria-label="选择选项">
+      <div class="sheet-head choice-head"><span class="choice-coin">¥</span><b>{{ choicePicker.field === 'city' ? '选择工作城市' : (choicePicker.field === 'workType' ? '选择工作制' : (choicePicker.field === 'sbBaseMode' ? '选择缴费基数' : (choicePicker.field === 'insuranceDeductionMode' ? '选择个人扣款依据' : (choicePicker.field === 'otComp' ? '选择加班补偿方式' : '选择加班类型')))) }}</b><button type="button" class="choice-close" @click="choicePicker.open = false" aria-label="关闭选择面板">×</button></div>
+      <label class="choice-search" v-if="choicePicker.field === 'city'"><span>⌕</span><input v-model="choicePicker.query" type="search" placeholder="搜索城市，如北京、成都"></label>
+      <div class="choice-list" role="listbox" :aria-label="choicePicker.field === 'city' ? '工作城市选项' : '选项'">
+        <button type="button" v-for="option in choiceOptions" :key="option.value" role="option" :aria-selected="choiceValue(choicePicker.field) === option.value" :class="{ selected: choiceValue(choicePicker.field) === option.value }" @click="selectChoice(option.value)">
+          <span><b>{{ option.label }}</b><small v-if="option.note">{{ option.note }}</small></span><i v-if="choiceValue(choicePicker.field) === option.value">✓</i>
+        </button>
+        <p class="choice-empty" v-if="!choiceOptions.length">没有找到相关选项</p>
+      </div>
+    </div>
+  </div>
+
   <!-- 上下班时间滚轮 -->
   <div class="mask" v-if="timePicker.open" @click.self="timePicker.open = false">
     <div class="sheet time-wheel-sheet">
@@ -508,12 +504,7 @@
       </div>
       <label class="field" v-if="draft.ot > 0">
         <span>加班类型</span>
-        <select v-model="draft.otType">
-          <option value="auto">自动判定</option>
-          <option value="workday">工作日倍率</option>
-          <option value="weekend">周末倍率</option>
-          <option value="holiday">法定节假日倍率</option>
-        </select>
+        <button type="button" class="select-trigger" :aria-expanded="choicePicker.open && choicePicker.field === 'draftOtType'" aria-haspopup="listbox" @click="openChoicePicker('draftOtType')"><b>{{ optionLabel('draftOtType', draft.otType) }}</b><i>⌄</i></button>
       </label>
       <textarea class="note" rows="2" maxlength="100" v-model="draft.note" placeholder="备注(选填)"></textarea>
       <div class="btn-row">

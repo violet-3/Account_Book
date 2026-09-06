@@ -365,6 +365,49 @@
   const medicalPct = pctField('medicalRate');
   const unemploymentPct = pctField('unemploymentRate');
   const cityList = computed(() => Object.entries(CITY).map(([k, v]) => ({ k, name: v.name })));
+  const STATIC_CHOICES = {
+    workType: [
+      { value: 'two', label: '双休', note: '周六、周日休息' },
+      { value: 'one', label: '单休', note: '仅周日休息' },
+      { value: 'bigsmall', label: '大小周', note: '单双周自动交替' },
+      { value: 'shift', label: '医护/轮班', note: '按自定义周期排班' },
+      { value: 'flexible', label: '销售/弹性', note: '按实际出勤记录' },
+    ],
+    sbBaseMode: [{ value: 'salary', label: '按月薪基数', note: '随月薪基数变化' }, { value: 'custom', label: '手动指定', note: '自行填写缴费基数' }],
+    insuranceDeductionMode: [{ value: 'rate', label: '按各险种个人比例', note: '按基数 × 个人比例计算' }, { value: 'contract', label: '按合同固定个人分摊', note: '按合同总额 × 个人比例计算' }],
+    otComp: [{ value: 'pay', label: '折算加班费', note: '按设置倍率计入工资' }, { value: 'timeoff', label: '折算调休', note: '记录可调休时长，不发钱' }, { value: 'none', label: '仅记录', note: '不计算补偿' }],
+    draftOtType: [{ value: 'auto', label: '自动判定', note: '按工作日、休息日、节假日判断' }, { value: 'workday', label: '工作日 ×1.5' }, { value: 'weekend', label: '休息日 ×2' }, { value: 'holiday', label: '法定节假日 ×3' }],
+  };
+  const choicePicker = reactive({ open: false, field: '', query: '' });
+  const choiceOptions = computed(() => {
+    const all = choicePicker.field === 'city'
+      ? cityList.value.map(city => ({ value: city.k, label: city.name }))
+      : (STATIC_CHOICES[choicePicker.field] || []);
+    const query = choicePicker.query.trim().toLowerCase();
+    return query ? all.filter(option => `${option.label}${option.note || ''}`.toLowerCase().includes(query)) : all;
+  });
+  function choiceValue(field) {
+    if (field === 'draftOtType') return draft.otType;
+    return state.settings[field];
+  }
+  function optionLabel(field, value) {
+    const options = field === 'city'
+      ? cityList.value.map(city => ({ value: city.k, label: city.name }))
+      : (STATIC_CHOICES[field] || []);
+    return (options.find(option => option.value === value) || {}).label || '请选择';
+  }
+  function openChoicePicker(field) {
+    choicePicker.field = field;
+    choicePicker.query = '';
+    choicePicker.open = true;
+  }
+  function selectChoice(value) {
+    const field = choicePicker.field;
+    if (field === 'city') applyCity(value);
+    else if (field === 'draftOtType') draft.otType = value;
+    else state.settings[field] = value;
+    choicePicker.open = false;
+  }
   const hourOptions = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
   const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
   const timePicker = reactive({ open: false, target: 'start', hour: '09', minute: '00' });
@@ -601,7 +644,8 @@
         depDraft, openDeposit, saveDeposit, deleteDeposit,
         calYear, calMonth, calCells, calStat, calHasRecords, calOtPay, calShift, calYearHint, calTimeoff,
         payYear, payMonth, pay, payRecordedDays, hasYearRecords, chartData, chartMax, payShift, percentStr,
-        cityList, hourOptions, minuteOptions, timePicker, hourWheel, minuteWheel, openTimePicker, syncWheelValue, chooseWheelValue, saveTimePicker,
+        cityList, choicePicker, choiceOptions, choiceValue, optionLabel, openChoicePicker, selectChoice,
+        hourOptions, minuteOptions, timePicker, hourWheel, minuteWheel, openTimePicker, syncWheelValue, chooseWheelValue, saveTimePicker,
         housingPct, insuranceSummary, insuranceTitle, socialDeductionInfo, socialBaseInfo, isCompanyOnlyInsurance, setHousingEnabled, setInsuranceRate, addInsurance, removeInsurance,
         doExport, doExportCSV, doExportXLSX, onImportFile, onImportSpreadsheetFile, doClear,
       };

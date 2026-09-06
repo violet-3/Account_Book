@@ -252,14 +252,16 @@
 
       <div class="card">
         <div class="card-title">排班与工时</div>
-        <div class="work-type-field">
+        <label class="field work-type-field">
           <span>工作制</span>
-          <div class="work-type-grid" role="group" aria-label="工作制">
-            <button type="button" v-for="type in WORK_TYPES" :key="type.value" :class="{ on: state.settings.workType === type.value }" :aria-pressed="state.settings.workType === type.value" @click="state.settings.workType = type.value">
-              <b>{{ type.label }}</b><small>{{ type.note }}</small>
-            </button>
-          </div>
-        </div>
+          <select v-model="state.settings.workType" class="work-type-select">
+            <option value="two">双休（周六、周日休）</option>
+            <option value="one">单休（仅周日休）</option>
+            <option value="bigsmall">大小周（单双周交替）</option>
+            <option value="shift">医护轮班（按周期排班）</option>
+            <option value="flexible">销售弹性（按实际记录）</option>
+          </select>
+        </label>
         <div class="field" v-if="state.settings.workType === 'bigsmall'">
           <span>本周是</span>
           <span class="chips small">

@@ -1,5 +1,5 @@
 /* sw.js — 离线缓存:network-first(保证更新及时),离线时回退缓存 */
-const CACHE = 'wangcai-v9-scroll-wheel';
+const CACHE = 'wangcai-v10-schedule-contrast';
 const ASSETS = [
   './',
   './index.html',

@@ -365,13 +365,6 @@
   const medicalPct = pctField('medicalRate');
   const unemploymentPct = pctField('unemploymentRate');
   const cityList = computed(() => Object.entries(CITY).map(([k, v]) => ({ k, name: v.name })));
-  const WORK_TYPES = [
-    { value: 'two', label: '双休', note: '周六、周日休' },
-    { value: 'one', label: '单休', note: '仅周日休' },
-    { value: 'bigsmall', label: '大小周', note: '单双周交替' },
-    { value: 'shift', label: '医护轮班', note: '按周期排班' },
-    { value: 'flexible', label: '销售弹性', note: '按实际记录' },
-  ];
   const hourOptions = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
   const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
   const timePicker = reactive({ open: false, target: 'start', hour: '09', minute: '00' });
@@ -608,7 +601,7 @@
         depDraft, openDeposit, saveDeposit, deleteDeposit,
         calYear, calMonth, calCells, calStat, calHasRecords, calOtPay, calShift, calYearHint, calTimeoff,
         payYear, payMonth, pay, payRecordedDays, hasYearRecords, chartData, chartMax, payShift, percentStr,
-        cityList, WORK_TYPES, hourOptions, minuteOptions, timePicker, hourWheel, minuteWheel, openTimePicker, syncWheelValue, chooseWheelValue, saveTimePicker,
+        cityList, hourOptions, minuteOptions, timePicker, hourWheel, minuteWheel, openTimePicker, syncWheelValue, chooseWheelValue, saveTimePicker,
         housingPct, insuranceSummary, insuranceTitle, socialDeductionInfo, socialBaseInfo, isCompanyOnlyInsurance, setHousingEnabled, setInsuranceRate, addInsurance, removeInsurance,
         doExport, doExportCSV, doExportXLSX, onImportFile, onImportSpreadsheetFile, doClear,
       };

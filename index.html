@@ -39,7 +39,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">出勤状态</div>
+        <div class="card-title icon-ledger">出勤状态</div>
         <div class="chips">
           <button v-for="(m, k) in STATUS_META" :key="k"
                   class="chip" :class="{ on: draft.status === k, [m.cls]: draft.status === k }"
@@ -48,7 +48,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">今日加班
+        <div class="card-title icon-coin">今日加班
           <span class="tag" v-if="draft.ot > 0">{{ OT_TYPE_LABEL[todayOtType] }}</span>
         </div>
         <div class="ot-row">
@@ -73,7 +73,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">备注</div>
+        <div class="card-title icon-ledger">备注</div>
         <textarea class="note" rows="2" maxlength="100" v-model="draft.note"
                   placeholder="选填:项目、事由等"></textarea>
       </div>
@@ -118,7 +118,7 @@
       <p class="cal-hint" v-if="calYearHint">{{ calYearHint }}</p>
 
       <div class="card overview">
-        <div class="card-title">{{ calMonth }}月统计</div>
+        <div class="card-title icon-coin">{{ calMonth }}月统计</div>
         <div class="grid4" v-if="calHasRecords">
           <div class="g4"><b>{{ calStat.attended }}<i class="sub-n">/{{ calStat.workdayCount }}</i></b><i>出勤/应出勤</i></div>
           <div class="g4"><b>{{ calStat.otTotal }}</b><i>加班/小时</i></div>
@@ -152,7 +152,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">明细</div>
+        <div class="card-title icon-ledger">明细</div>
         <div class="li">
           <span>月薪基数</span><b>¥{{ fmtMoney(effSettings.baseSalary) }}</b>
         </div>
@@ -213,7 +213,7 @@
       </template>
 
       <div class="card" v-if="hasYearRecords">
-        <div class="card-title">{{ payYear }}年实发走势</div>
+        <div class="card-title icon-ingot">{{ payYear }}年实发走势</div>
         <div class="chart">
           <div class="bar-wrap" v-for="b in chartData" :key="b.label">
             <span class="bar-val" v-if="b.cur">¥{{ fmtMoney(b.net, true) }}</span>
@@ -229,7 +229,7 @@
     <!-- ============ 设置 ============ -->
     <section v-show="page==='settings'" class="page-settings">
       <div class="card">
-        <div class="card-title">薪资</div>
+        <div class="card-title icon-ingot">薪资</div>
         <label class="field">
           <span>月薪基数(元)</span>
           <input type="number" v-model.number="state.settings.baseSalary" min="0" step="100">
@@ -249,7 +249,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">排班与工时</div>
+        <div class="card-title icon-ledger">排班与工时</div>
         <label class="field work-type-field">
           <span>工作制</span>
           <button type="button" class="select-trigger" :aria-expanded="choicePicker.open && choicePicker.field === 'workType'" aria-haspopup="listbox" @click="openChoicePicker('workType')"><b>{{ optionLabel('workType', state.settings.workType) }}</b><i>⌄</i></button>
@@ -281,7 +281,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">{{ insuranceTitle }} <small>含单位全额缴纳项目</small></div>
+        <div class="card-title icon-coin">{{ insuranceTitle }} <small>含单位全额缴纳项目</small></div>
         <div class="housing-choice" role="group" aria-label="是否缴纳住房公积金">
           <button type="button" :class="{ on: insuranceTitle === '五险一金' }" @click="setHousingEnabled(true)">含公积金</button>
           <button type="button" :class="{ on: insuranceTitle !== '五险一金' }" @click="setHousingEnabled(false)">仅五险（无公积金）</button>
@@ -333,7 +333,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">加班补偿</div>
+        <div class="card-title icon-pouch">加班补偿</div>
         <label class="field">
           <span>补偿方式</span>
           <button type="button" class="select-trigger" :aria-expanded="choicePicker.open && choicePicker.field === 'otComp'" aria-haspopup="listbox" @click="openChoicePicker('otComp')"><b>{{ optionLabel('otComp', state.settings.otComp) }}</b><i>⌄</i></button>
@@ -347,7 +347,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">个税</div>
+        <div class="card-title icon-ledger">个税</div>
         <label class="field">
           <span>每月专项附加扣除合计(元)</span>
           <input type="number" v-model.number="state.settings.specialDeduction" min="0" step="100">
@@ -362,7 +362,7 @@
       </div>
 
       <details class="card settings-card">
-        <summary class="card-title">数据导入与导出</summary>
+        <summary class="card-title icon-ledger">数据导入与导出</summary>
         <div class="btn-row">
           <button class="btn" @click="doExport">导出备份</button>
           <button class="btn" @click="doExportXLSX">导出 .xlsx</button>
@@ -387,20 +387,27 @@
         <p class="ph-sub" v-else>记下每一笔存款,这里会告诉你一年能攒多少</p>
       </div>
 
+      <div class="card month-save-card" v-if="savYear.planMonthly > 0">
+        <div class="month-save-head"><span>本月攒钱进度</span><b>{{ savYear.monthPct }}%</b></div>
+        <div class="month-save-bar" role="progressbar" :aria-valuenow="savYear.monthPct" aria-valuemin="0" aria-valuemax="100" aria-label="本月攒钱进度"><i :style="{ width: savYear.monthPct + '%' }"></i></div>
+        <p>已存 ¥{{ fmtMoney(savYear.monthSaved) }} <span>/ 计划 ¥{{ fmtMoney(savYear.planMonthly) }}</span></p>
+        <small>{{ savYear.monthRemaining > 0 ? `距本月计划还差 ¥${fmtMoney(savYear.monthRemaining)}` : '本月计划已达成' }}</small>
+      </div>
+
       <div class="btn-row">
         <button class="btn primary" @click="openDeposit()">记一笔存款</button>
         <button class="btn" @click="openGoalEditor()">新建目标</button>
       </div>
 
       <div class="card goal-card" v-for="g in goalCards" :key="g.id">
-        <div class="goal-head" @click="expandedGoal = expandedGoal === g.id ? '' : g.id">
+        <button type="button" class="goal-head" :aria-expanded="expandedGoal === g.id" @click="expandedGoal = expandedGoal === g.id ? '' : g.id">
           <span class="goal-icon">{{ g.icon }}</span>
-          <div class="goal-info">
+          <span class="goal-info">
             <b>{{ g.name }}<i v-if="g.pct >= 100"> 🎉</i></b>
             <span class="goal-num">¥{{ fmtMoney(g.saved) }} <i>/ ¥{{ fmtMoney(g.target) }}</i></span>
-          </div>
+          </span>
           <span class="goal-pct">{{ g.pct }}%</span>
-        </div>
+        </button>
         <div class="prog"><i :style="{ width: g.pct + '%' }"></i></div>
         <p class="hint" v-if="g.etaMonth === '已达成'">目标达成,犒劳一下自己吧!</p>
         <p class="hint" v-else-if="g.monthlyPlan > 0">每月计划存 ¥{{ fmtMoney(g.monthlyPlan, true) }}<template v-if="g.etaMonth"> · 预计 {{ g.etaMonth }} 达成</template></p>
@@ -430,7 +437,7 @@
       </p>
 
       <div class="card tips-card">
-        <div class="card-title">攒钱小知识</div>
+        <div class="card-title icon-pouch">攒钱小知识</div>
         <p class="hint">· 目标账户法:为每个目标单独立户,专款专用,不动用就不心疼。</p>
         <p class="hint">· 52 周阶梯存钱法:每周比上周多存 10 元,一年可攒下 13,780 元。</p>
         <p class="hint">· 应急备用金建议存够 3–6 个月生活费,这是打工人的底气。</p>
@@ -441,7 +448,7 @@
   <!-- 通用主题选择面板：替代系统下拉框，城市支持筛选 -->
   <div class="mask" v-if="choicePicker.open" @click.self="choicePicker.open = false">
     <div class="sheet choice-sheet" role="dialog" aria-modal="true" aria-label="选择选项">
-      <div class="sheet-head choice-head"><span class="choice-coin">¥</span><b>{{ choicePicker.field === 'city' ? '选择工作城市' : (choicePicker.field === 'workType' ? '选择工作制' : (choicePicker.field === 'sbBaseMode' ? '选择缴费基数' : (choicePicker.field === 'insuranceDeductionMode' ? '选择个人扣款依据' : (choicePicker.field === 'otComp' ? '选择加班补偿方式' : '选择加班类型')))) }}</b><button type="button" class="choice-close" @click="choicePicker.open = false" aria-label="关闭选择面板">×</button></div>
+      <div class="sheet-head choice-head"><span class="choice-coin" aria-hidden="true"></span><b>{{ choicePicker.field === 'city' ? '选择工作城市' : (choicePicker.field === 'workType' ? '选择工作制' : (choicePicker.field === 'sbBaseMode' ? '选择缴费基数' : (choicePicker.field === 'insuranceDeductionMode' ? '选择个人扣款依据' : (choicePicker.field === 'otComp' ? '选择加班补偿方式' : '选择加班类型')))) }}</b><button type="button" class="choice-close" @click="choicePicker.open = false" aria-label="关闭选择面板">×</button></div>
       <label class="choice-search" v-if="choicePicker.field === 'city'"><span>⌕</span><input v-model="choicePicker.query" type="search" placeholder="搜索城市，如北京、成都"></label>
       <div class="choice-list" role="listbox" :aria-label="choicePicker.field === 'city' ? '工作城市选项' : '选项'">
         <button type="button" v-for="option in choiceOptions" :key="option.value" role="option" :aria-selected="choiceValue(choicePicker.field) === option.value" :class="{ selected: choiceValue(choicePicker.field) === option.value }" @click="selectChoice(option.value)">
@@ -490,13 +497,13 @@
         <b>{{ draftDateLabel }}</b>
         <span class="tag">{{ draftKindLabel }}</span>
       </div>
-      <div class="card-title">出勤状态</div>
+      <div class="card-title icon-ledger">出勤状态</div>
       <div class="chips">
         <button v-for="(m, k) in STATUS_META" :key="k"
                 class="chip" :class="{ on: draft.status === k, [m.cls]: draft.status === k }"
                 @click="draft.status = k">{{ m.label }}</button>
       </div>
-      <div class="card-title">加班</div>
+      <div class="card-title icon-coin">加班</div>
       <div class="ot-row">
         <button class="step-btn" @click="draft.ot = Math.max(0, Math.round((draft.ot - 0.5) * 10) / 10)">−</button>
         <div class="ot-val"><b>{{ draft.ot.toFixed(1) }}</b><i>小时</i></div>
@@ -519,7 +526,7 @@
   <div class="mask" v-if="goalDraft.open" @click.self="goalDraft.open = false">
     <div class="sheet">
       <div class="sheet-head"><b>{{ goalDraft.editId ? '编辑目标' : '新建目标' }}</b></div>
-      <div class="card-title">挑一个(点图标一键填好名称)</div>
+      <div class="card-title icon-pouch">挑一个(点图标一键填好名称)</div>
       <div class="chips small icon-chips">
         <button class="chip" :class="{ on: goalDraft.icon === t.icon && goalDraft.name === t.name }"
                 v-for="t in GOAL_TEMPLATES" :key="t.icon" @click="applyTemplate(t)">{{ t.icon }} {{ t.name }}</button>
@@ -547,7 +554,7 @@
   <div class="mask" v-if="depDraft.open" @click.self="depDraft.open = false">
     <div class="sheet">
       <div class="sheet-head"><b>记一笔存款</b></div>
-      <div class="card-title">存入目标</div>
+      <div class="card-title icon-ingot">存入目标</div>
       <div class="chips small">
         <button class="chip" :class="{ on: depDraft.goalId === g.id }"
                 v-for="g in state.savings.goals" :key="g.id" @click="depDraft.goalId = g.id">{{ g.icon }} {{ g.name }}</button>

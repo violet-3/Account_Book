@@ -55,6 +55,12 @@ eq(proj.planYearly, 9600, '计划口径年攒');
 eq(proj.avgMonthly, 3700 / 3, '实际月均');
 eq(proj.actualYearly, 14799.96, '实际口径年攒(月均两位小数×12)');
 eq(proj.savedThisYear, 3700, '今年已攒');
+eq(proj.monthSaved, 1400, '本月已存合计');
+eq(proj.monthRemaining, 0, '本月超出计划时待存为零');
+eq(proj.monthPct, 100, '本月超出计划时进度封顶');
+const monthBehind = S.yearProjection({}, [{ monthlyPlan: 2000 }], deps, '2026-08');
+eq(monthBehind.monthRemaining, 600, '本月距计划还差金额');
+eq(monthBehind.monthPct, 70, '本月计划达成比例');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

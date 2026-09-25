@@ -68,9 +68,14 @@
   function yearProjection(settings, goals, deposits, nowYm) {
     const planMonthly = round2((goals || []).reduce((a, g) => a + (Number(g.monthlyPlan) || 0), 0));
     const savedThisYear = savedInYear(String(nowYm).slice(0, 4), deposits);
+    const monthSaved = round2((deposits || []).reduce((sum, deposit) =>
+      String(deposit.date || '').startsWith(`${nowYm}-`) ? sum + (Number(deposit.amount) || 0) : sum, 0));
     const avgMonthly = monthlyAverage(nowYm, deposits, 3);
     return {
       planMonthly,
+      monthSaved,
+      monthRemaining: round2(Math.max(0, planMonthly - monthSaved)),
+      monthPct: planMonthly > 0 ? Math.min(100, Math.round(monthSaved / planMonthly * 100)) : 0,
       planYearly: round2(planMonthly * 12),
       avgMonthly,
       actualYearly: round2(avgMonthly * 12),

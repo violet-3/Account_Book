@@ -1,5 +1,5 @@
 /* sw.js — 离线缓存:network-first(保证更新及时),离线时回退缓存 */
-const CACHE = 'wangcai-v12-theme-picker';
+const CACHE = 'wangcai-v13-saving-progress';
 const ASSETS = [
   './',
   './index.html',
@@ -15,6 +15,10 @@ const ASSETS = [
   './vendor/xlsx.full.min.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/coin.svg',
+  './icons/ingot.svg',
+  './icons/ledger.svg',
+  './icons/pouch.svg',
 ];
 
 self.addEventListener('install', (e) => {

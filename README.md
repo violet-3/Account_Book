@@ -50,7 +50,7 @@
 - **工资估算**:加班费(倍率可改)、缺勤扣款、五险一金(内置 16 城个人比例与基数上下限,可改)、个税**累计预扣预缴法**(5000 起征,支持专项附加扣除),工资条式明细 + 全年实发走势图
 - **五险一金解耦**:养老、医疗、失业、公积金可分别启用和调整比例,还可添加任意自定义险种
 - **加班补偿**:加班费 / **调休折算**(累计可休时长) / 仅记录,三种模式
-- **攒钱规划**:储蓄目标(旅行、恋爱基金、应急备用金、买房首付等 12 个模板)+ 存款流水 + 年度储蓄预估(计划口径与实际速度双口径),预计达成年月一目了然
+- **攒钱规划**:储蓄目标(旅行、恋爱基金、应急备用金、买房首付等 12 个模板)+ 存款流水 + 本月进度 + 年度储蓄预估(计划口径与实际速度双口径),预计达成年月一目了然
 - **数据自主**:100% 存本地浏览器,不注册不上传;JSON 导出 / 导入备份
 - **三端适配**:手机 / 平板 / 桌面响应式布局,深色模式跟随系统
 - **Excel 兼容导出**:可在设置中导出 UTF-8 CSV,使用 Excel 直接打开或另存为 `.xlsx`
@@ -79,7 +79,7 @@ npm run mobile:ios # 打开 Xcode(macOS)
 
 项目使用 Capacitor 复用同一套 Web 业务代码，原生工程为 `android/` 和 `ios/`。修改根目录的网页文件后，先将 `index.html`、`css/`、`js/`、`vendor/`、`icons/` 同步到 `www/`，再执行 `npm run mobile:sync`，即可用 Android Studio 或 Xcode 打开客户端工程。客户端默认离线运行，数据保存在本机；Android 可构建 APK，iOS 构建需要 macOS、Xcode 和 Apple Developer 签名。
 
-本次需求、待验收事项和历史改动记录见 [docs/CHANGE_REQUESTS.md](docs/CHANGE_REQUESTS.md)。
+本次需求、待验收事项和历史改动记录见 [docs/CHANGE_REQUESTS.md](docs/CHANGE_REQUESTS.md)；理财功能与未来 AI 助手的演进建议见 [docs/FINANCE_ROADMAP.md](docs/FINANCE_ROADMAP.md)。
 
 <details>
 <summary>目录结构 Structure</summary>

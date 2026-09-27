@@ -1,12 +1,12 @@
 /* =========================================================
  * db.js — 本地持久层(localStorage)
- * 所有数据保存在浏览器本地,不上传任何服务器;
- * 支持导出/导入 JSON 备份。
+ * 主账本只保存 WANGCAI_SECURE 密封包；旧明文只用于一次性迁移。
  * ========================================================= */
 (function (root) {
   'use strict';
 
   const KEY = 'dagong-ledger-v1';
+  const VAULT_KEY = 'wangcai-vault-v1';
 
   const DEFAULT_SETTINGS = {
     city: 'beijing',
@@ -55,6 +55,7 @@
       settings: { ...DEFAULT_SETTINGS, insuranceItems: DEFAULT_SETTINGS.insuranceItems.map(x => ({ ...x })) },
       records: {},            // 'YYYY-MM-DD': {status, ot, otType, note}
       savings: { goals: [], deposits: [] }, // 储蓄目标与存款流水
+      evidence: { events: [] }, // 操作时间线；原始附件密文在 IndexedDB
       createdAt: new Date().toISOString(),
     };
   }
@@ -71,12 +72,15 @@
   }
   const storage = { ok: probeStorage() };
 
-  function loadState() {
-    if (!storage.ok) return defaults();
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw) return defaults();
-      const data = JSON.parse(raw);
+  function normalizeState(data) {
+      if (!data || typeof data !== 'object' || Array.isArray(data) ||
+          !data.settings || typeof data.settings !== 'object' || Array.isArray(data.settings) ||
+          !data.records || typeof data.records !== 'object' || Array.isArray(data.records) ||
+          (data.savings !== undefined && (!data.savings || typeof data.savings !== 'object' ||
+            !Array.isArray(data.savings.goals) || !Array.isArray(data.savings.deposits))) ||
+          (data.evidence !== undefined && (!data.evidence || !Array.isArray(data.evidence.events)))) {
+        throw new Error('账本数据不完整，已停止读取');
+      }
       const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
       if (!data.settings || !Array.isArray(data.settings.insuranceItems)) {
         settings.insuranceItems = [
@@ -97,40 +101,37 @@
           goals: (data.savings && data.savings.goals) || [],
           deposits: (data.savings && data.savings.deposits) || [],
         },
+        evidence: { events: data.evidence?.events || [] },
       };
-    } catch {
-      console.warn('本地数据读取失败,已重置');
-      return defaults();
-    }
   }
 
-  function saveState(state) {
-    if (!storage.ok) return false;
+  function inspect() {
+    if (!storage.ok) return 'unavailable';
     try {
-      localStorage.setItem(KEY, JSON.stringify({
-        version: state.version,
-        settings: state.settings,
-        records: state.records,
-        savings: state.savings,
-        createdAt: state.createdAt,
-        savedAt: new Date().toISOString(),
-      }));
-      return true;
-    } catch (e) {
-      console.warn('本地保存失败', e);
-      return false;
-    }
+      if (localStorage.getItem(VAULT_KEY) !== null) return 'unlock';
+      if (localStorage.getItem(KEY) !== null) return 'migrate';
+      return 'setup';
+    } catch { return 'unavailable'; }
   }
-
-  function exportJSON(state) {
-    return JSON.stringify({
-      app: '打工人账本',
-      version: state.version,
-      exportedAt: new Date().toISOString(),
-      settings: state.settings,
-      records: state.records,
-      savings: state.savings,
-    }, null, 2);
+  function readLegacy() {
+    const raw = localStorage.getItem(KEY);
+    if (raw === null) throw new Error('没有找到旧账本');
+    return normalizeState(JSON.parse(raw));
+  }
+  function readVault() {
+    const raw = localStorage.getItem(VAULT_KEY);
+    if (raw === null) throw new Error('没有找到加密账本');
+    return JSON.parse(raw);
+  }
+  function writeVault(vault) {
+    if (!storage.ok) throw new Error('本地存储不可用');
+    const raw = JSON.stringify(vault);
+    localStorage.setItem(VAULT_KEY, raw);
+    if (localStorage.getItem(VAULT_KEY) !== raw) throw new Error('加密账本写入校验失败');
+  }
+  function removeLegacy() {
+    localStorage.removeItem(KEY);
+    if (localStorage.getItem(KEY) !== null) throw new Error('旧明文账本未能移除');
   }
 
   function importJSON(text) {
@@ -180,5 +181,6 @@
     return '\ufeff' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
   }
 
-  root.DB = { KEY, DEFAULT_SETTINGS, defaults, loadState, saveState, exportJSON, importJSON, exportCSV, storage };
+  root.DB = { KEY, VAULT_KEY, DEFAULT_SETTINGS, defaults, normalizeState, inspect, readLegacy,
+    readVault, writeVault, removeLegacy, importJSON, exportCSV, storage };
 })(typeof window !== 'undefined' ? window : globalThis);

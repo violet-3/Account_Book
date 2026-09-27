@@ -57,6 +57,24 @@ body {
   margin: 0 auto;
   padding: 20px 16px calc(96px + env(safe-area-inset-bottom));
 }
+.vault-entry { min-height: 100dvh; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+.vault-card { width: min(100%, 440px); padding: 24px; border-radius: 22px; background: var(--card); box-shadow: var(--shadow); }
+.vault-emblem { width: 48px; height: 48px; margin-bottom: 14px; background: center / contain no-repeat url('../icons/ingot.svg'); }
+.vault-card h1 { font-size: 1.2rem; margin-bottom: 8px; }
+.vault-card > p { color: var(--text-2); font-size: .88rem; line-height: 1.65; }
+.vault-card form { margin-top: 20px; }
+.vault-card .field { display: grid; gap: 6px; margin-bottom: 12px; }
+.vault-card .field input, .vault-restore .field input { width: 100%; min-width: 0; }
+.vault-action, .vault-import { width: 100%; margin-top: 8px; }
+.vault-card .vault-note { margin-top: 16px; font-size: .76rem; }
+.vault-error { color: #b91c1c; font-size: .82rem; margin: 8px 0; }
+.vault-restore { max-width: 440px; }
+.vault-restore .field { display: grid; gap: 6px; margin: 18px 0 8px; }
+.vault-methods { display: flex; gap: 8px; margin: 12px 0; }
+.vault-methods .btn { flex: 1; min-width: 0; }
+.recovery-mask { z-index: 120; }
+.recovery-code { display: block; overflow-wrap: anywhere; user-select: all; padding: 14px; margin: 12px 0; border: 1px dashed var(--line, #d8dce7); border-radius: 12px; background: var(--surface-soft, #f6f7fb); color: var(--ink, #25283a); font-size: 1.05rem; letter-spacing: .04em; }
+@media (prefers-color-scheme: dark) { .vault-error { color: #fca5a5; } }
 section { animation: pagein .22s ease; }
 @keyframes pagein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
@@ -101,6 +119,18 @@ section { animation: pagein .22s ease; }
   padding: 2px 10px;
 }
 .hint { color: var(--text-3); font-size: .78rem; margin-top: 10px; }
+.evidence-entry { margin-top: 10px; }
+.evidence-back { margin: 0 0 12px 4px; }
+.page-evidence .field { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.page-evidence .field input, .page-evidence .field textarea { width: 100%; min-width: 0; }
+.page-evidence .btn.block + .btn.block { margin-top: 8px; }
+.evidence-summary { display: flex; flex-wrap: wrap; gap: 8px 14px; color: var(--text-2); font-size: .8rem; margin: 12px 0; }
+.evidence-event { border-top: 1px solid var(--line); padding: 10px 0; }
+.evidence-event summary { cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.evidence-event summary b { color: var(--text); font-size: .86rem; }
+.evidence-event summary small, .evidence-event p { color: var(--text-2); font-size: .76rem; }
+.evidence-event p { margin: 7px 0; }
+.evidence-hash { overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
 
 /* ---------- 状态 chips ---------- */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }

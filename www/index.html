@@ -15,11 +15,41 @@
 </head>
 <body>
 <div id="app" v-cloak>
+  <div class="vault-entry" v-if="security.mode !== 'unlocked'">
+    <div class="vault-card">
+      <div class="vault-emblem" aria-hidden="true"></div>
+      <h1>旺财 · 本机加密账本</h1>
+      <p v-if="security.mode === 'setup'">首次使用请设置解锁口令。此后账本只以密文保存在本机。</p>
+      <p v-else-if="security.mode === 'migrate'">发现旧版明文账本。设置口令后会先加密并校验，成功后才移除旧明文。</p>
+      <p v-else-if="security.mode === 'unlock'">输入口令解锁本机账本。忘记口令时，也可使用首次创建后自行保管的恢复密钥。</p>
+      <p v-else>当前环境无法安全使用本地存储。原账本不会被清空，请更换受支持的浏览器或客户端。</p>
+      <form v-if="security.mode !== 'unavailable'" @submit.prevent="security.mode === 'unlock' ? unlockVault() : setupEncryption()">
+        <div v-if="security.mode === 'unlock'" class="vault-methods">
+          <button type="button" class="btn" :class="{ primary: security.unlockMethod === 'password' }" @click="security.unlockMethod = 'password'; security.passphrase = ''; security.error = ''">口令解锁</button>
+          <button type="button" class="btn" :class="{ primary: security.unlockMethod === 'recovery' }" @click="security.unlockMethod = 'recovery'; security.passphrase = ''; security.error = ''" :disabled="!security.hasRecovery">恢复密钥</button>
+        </div>
+        <label class="field"><span>{{ security.mode === 'unlock' && security.unlockMethod === 'recovery' ? '恢复密钥' : '解锁口令' }}</span><input :type="security.mode === 'unlock' && security.unlockMethod === 'recovery' ? 'text' : 'password'" v-model="security.passphrase" autocomplete="off" :minlength="security.mode === 'unlock' && security.unlockMethod === 'recovery' ? undefined : 12" :placeholder="security.mode === 'unlock' ? (security.unlockMethod === 'recovery' ? '输入保存的本机恢复密钥' : '输入已有口令') : '至少 12 个字符，建议使用独立短语'" required></label>
+        <label class="field" v-if="security.mode !== 'unlock'"><span>再次输入口令</span><input type="password" v-model="security.confirmation" autocomplete="off" minlength="12" placeholder="确认解锁口令" required></label>
+        <template v-if="security.mode === 'unlock' && security.unlockMethod === 'recovery'">
+          <p class="hint">恢复成功后请设置新口令；应用会同时生成一把新的恢复密钥，请重新保存。</p>
+          <label class="field"><span>设置新口令（至少 12 个字符）</span><input type="password" v-model="security.newPassphrase" autocomplete="new-password" minlength="12" required></label>
+          <label class="field"><span>再次输入新口令</span><input type="password" v-model="security.newConfirmation" autocomplete="new-password" minlength="12" required></label>
+        </template>
+        <p class="vault-error" role="alert" v-if="security.error">{{ security.error }}</p>
+        <button class="btn primary vault-action" type="submit" :disabled="security.busy">{{ security.busy ? '处理中…' : (security.mode === 'unlock' ? '解锁账本' : '开启加密并进入') }}</button>
+      </form>
+      <button class="btn vault-import" v-if="security.mode !== 'unavailable'" type="button" @click="$refs.lockFile.click()">从加密备份恢复</button>
+      <input type="file" accept=".wangcai,.json,application/json" ref="lockFile" style="display:none" @change="onImportFile">
+      <p class="vault-note">口令不会上传或保存。加密可保护落盘数据；设备已解锁或应用运行时仍须注意设备安全。</p>
+    </div>
+  </div>
+
+  <div class="app-shell" v-if="security.mode === 'unlocked'">
 
   <main class="content">
 
-    <div class="storage-warn" v-if="!storageOk">
-      ⚠️ 当前环境无法写入本地存储,记录仅保留到关闭页面前。请用 Chrome / Edge / 手机浏览器打开,或部署到静态托管后使用。
+    <div class="storage-warn" role="alert" v-if="!storageOk">
+      ⚠️ 加密保存失败，最新修改可能尚未落盘。请勿关闭页面，先检查存储空间并导出备份。
     </div>
     <!-- ============ 今日打卡 ============ -->
     <section v-show="page==='today'" class="page-today">
@@ -79,7 +109,46 @@
       </div>
 
       <button class="btn primary block" @click="saveDraft()">保存今日记录</button>
+      <button class="btn block evidence-entry" type="button" @click="page = 'evidence'">工作证据档案 · {{ evidenceFileCount }} 份原件 →</button>
 
+    </section>
+
+    <!-- ============ 工作证据档案 ============ -->
+    <section v-show="page==='evidence'" class="page-evidence">
+      <button class="text-link evidence-back" type="button" @click="page = 'today'">‹ 返回今日</button>
+      <div class="card">
+        <div class="card-title icon-ledger">工作证据档案</div>
+        <p class="hint">打卡是本人记录。请一并保存来自单位、银行和沟通平台的原始材料，以便对照。附件在本机加密保存；导出的证据包为明文。</p>
+        <div class="evidence-summary"><span>打卡与附件留痕 {{ state.evidence.events.length }} 条</span><span>原件 {{ evidenceFileCount }} 份</span></div>
+        <button class="btn primary block" type="button" :disabled="evidenceBusy" @click="exportEvidencePackage">导出完整证据包 .zip</button>
+        <button class="btn block" type="button" :disabled="evidenceBusy || !state.evidence.events.length" @click="copyEvidenceDigest">复制时间线校验值</button>
+        <p class="hint">证据包含原件、时间线、文件校验清单和工资估算；本机时间、本人打卡与文件来源未经第三方核实。</p>
+      </div>
+      <div class="card">
+        <div class="card-title icon-coin">添加原始材料</div>
+        <div class="chips small evidence-sources">
+          <button v-for="(label, key) in evidenceSources" :key="key" class="chip" :class="{ on: evidenceDraft.source === key }" type="button" @click="evidenceDraft.source = key">{{ label }}</button>
+        </div>
+        <label class="field"><span>关联工作日期（可改）</span><input type="date" v-model="evidenceDraft.workDate"></label>
+        <label class="field"><span>材料名称</span><input type="text" maxlength="80" v-model="evidenceDraft.title" placeholder="如：入职通知、工资转账、解除通知"></label>
+        <label class="field"><span>补充说明</span><textarea class="note" rows="2" maxlength="300" v-model="evidenceDraft.note" placeholder="记录材料从哪里取得，以及与哪件事有关"></textarea></label>
+        <input ref="evidenceInput" type="file" style="display:none" @change="chooseEvidenceFile">
+        <button class="btn block" type="button" @click="$refs.evidenceInput.click()">{{ evidenceFile ? evidenceFile.name : '选择原始文件（单个不超过 20 MB）' }}</button>
+        <button class="btn primary block" type="button" :disabled="evidenceBusy || !evidenceFile" @click="saveEvidenceFile">{{ evidenceBusy ? '处理中…' : '加密保存原件' }}</button>
+        <p class="hint" role="status">{{ evidenceStatus }}</p>
+      </div>
+      <div class="card">
+        <div class="card-title icon-ledger">操作与材料时间线</div>
+        <p class="hint" v-if="!evidenceEvents.length">从现在起的打卡修改和上传原件会留在这里。升级前的历史打卡仍在日历中，但无法补造当时的操作时间。</p>
+        <details class="evidence-event" v-for="event in evidenceEvents" :key="event.id">
+          <summary><b>{{ event.title }}</b><small>{{ event.recordedAt.slice(0, 16).replace('T', ' ') }} · {{ event.workDate || '未关联日期' }}</small></summary>
+          <p>来源：{{ evidenceSources[event.source] || '其他来源' }}（由用户选择）</p>
+          <p v-if="event.note">{{ event.note }}</p>
+          <p v-if="event.before">原打卡：{{ event.before.status }} · 加班 {{ event.before.ot }} 小时 · {{ event.before.note }}</p>
+          <p v-if="event.after">新打卡：{{ event.after.status }} · 加班 {{ event.after.ot }} 小时 · {{ event.after.note }}</p>
+          <template v-if="event.file"><p>原件：{{ event.file.name }} · {{ Math.round(event.file.size / 1024) }} KB</p><p class="evidence-hash">SHA-256：{{ event.file.sha256 }}</p><button class="btn" type="button" @click="downloadEvidenceFile(event)">下载原件（明文）</button></template>
+        </details>
+      </div>
     </section>
 
     <!-- ============ 出勤日历 ============ -->
@@ -116,6 +185,7 @@
         <span class="lg st-absent"></span>旷工
       </div>
       <p class="cal-hint" v-if="calYearHint">{{ calYearHint }}</p>
+      <button class="btn" v-if="calYearHint" @click="refreshHolidayData">联网更新此年节假日</button>
 
       <div class="card overview">
         <div class="card-title icon-coin">{{ calMonth }}月统计</div>
@@ -362,18 +432,27 @@
       </div>
 
       <details class="card settings-card">
+        <summary class="card-title icon-ledger">本机加密与锁定</summary>
+        <p class="hint">账本在本机密文保存；当前会话解锁时数据会在内存中可读。锁定后需重新输入口令。</p>
+        <p class="hint" v-if="security.hasRecovery">恢复密钥已设置。请离线妥善保管；任何拿到它的人都能恢复账本并重设口令。</p>
+        <p class="hint" v-else>尚未设置恢复密钥。设置后，忘记口令时仍可恢复账本。</p>
+        <button class="btn" type="button" @click="createRecoveryKey" :disabled="security.busy">{{ security.hasRecovery ? '更换恢复密钥' : '生成恢复密钥' }}</button>
+        <button class="btn" type="button" @click="lockVault">立即锁定账本</button>
+      </details>
+
+      <details class="card settings-card">
         <summary class="card-title icon-ledger">数据导入与导出</summary>
         <div class="btn-row">
-          <button class="btn" @click="doExport">导出备份</button>
-          <button class="btn" @click="doExportXLSX">导出 .xlsx</button>
-          <button class="btn" @click="doExportCSV">导出 Excel 表格</button>
+          <button class="btn primary" @click="doExport">导出加密备份</button>
+          <button class="btn" @click="doExportXLSX">导出 .xlsx（明文）</button>
+          <button class="btn" @click="doExportCSV">导出 CSV（明文）</button>
           <button class="btn" @click="$refs.sheetFile.click()">上传表格</button>
           <button class="btn" @click="$refs.file.click()">导入备份</button>
-          <input type="file" accept=".json,application/json" ref="file" style="display:none" @change="onImportFile">
+          <input type="file" accept=".wangcai,.json,application/json" ref="file" style="display:none" @change="onImportFile">
           <input type="file" accept=".xlsx,.xls,.csv" ref="sheetFile" style="display:none" @change="onImportSpreadsheetFile">
           <button class="btn danger" @click="doClear">清空记录</button>
         </div>
-        <p class="hint">所有数据仅保存在本设备浏览器中，不会上传服务器。可导出 `.xlsx` 在本地修改后通过“上传表格”恢复；换设备或清理浏览器前仍请保留 JSON 备份。CSV 文件可用 Excel 打开。</p>
+        <p class="hint">{{ security.saveStatus }}。主账本和 .wangcai 备份已加密；CSV、XLSX 是明文，仅在需要时导出并妥善保管。口令与恢复密钥都遗失时，无法恢复加密数据。</p>
       </details>
 
     </section>
@@ -584,7 +663,7 @@
 
   <nav class="tabbar">
     <div class="nav-brand" aria-label="旺财"><span class="brand-seal">旺</span><span><b>旺财</b><small>记工 · 理财 · 旺生活</small></span></div>
-    <button :class="{ on: page === 'today' }" @click="page = 'today'">
+    <button :class="{ on: page === 'today' || page === 'evidence' }" @click="page = 'today'">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
       <span>今日</span>
     </button>
@@ -605,6 +684,29 @@
       <span>设置</span>
     </button>
   </nav>
+  </div>
+
+  <div class="mask" v-if="security.importing">
+    <div class="sheet vault-restore" role="dialog" aria-modal="true" aria-label="恢复加密备份">
+      <div class="sheet-head"><b>恢复加密备份</b></div>
+      <p class="hint">可用创建备份时的口令，或对应账本的恢复密钥。验证成功后才会覆盖本机账本。</p>
+      <div class="vault-methods"><button type="button" class="btn" :class="{ primary: security.backupMethod === 'password' }" @click="security.backupMethod = 'password'; security.backupPassphrase = ''; security.error = ''">备份口令</button><button type="button" class="btn" :class="{ primary: security.backupMethod === 'recovery' }" @click="security.backupMethod = 'recovery'; security.backupPassphrase = ''; security.error = ''">恢复密钥</button></div>
+      <label class="field"><span>{{ security.backupMethod === 'recovery' ? '恢复密钥' : '备份口令' }}</span><input :type="security.backupMethod === 'recovery' ? 'text' : 'password'" v-model="security.backupPassphrase" autocomplete="off" :minlength="security.backupMethod === 'password' ? 12 : undefined" required></label>
+      <template v-if="security.backupMethod === 'recovery'"><p class="hint">恢复后需要设置新口令，并保存新生成的恢复密钥。</p><label class="field"><span>新口令（至少 12 个字符）</span><input type="password" v-model="security.newPassphrase" minlength="12" required></label><label class="field"><span>再次输入新口令</span><input type="password" v-model="security.newConfirmation" minlength="12" required></label></template>
+      <p class="vault-error" role="alert" v-if="security.error">{{ security.error }}</p>
+      <div class="btn-row"><button type="button" class="btn" @click="cancelBackupImport">取消</button><button type="button" class="btn primary" :disabled="security.busy" @click="confirmBackupImport">{{ security.busy ? '验证中…' : '验证并恢复' }}</button></div>
+    </div>
+  </div>
+  <div class="mask recovery-mask" v-if="security.recoveryReveal">
+    <div class="sheet vault-restore" role="dialog" aria-modal="true" aria-label="保存恢复密钥">
+      <div class="sheet-head"><b>请立即保存恢复密钥</b></div>
+      <p class="hint">它只显示这一次，不会上传或另存到应用。建议抄写并放在安全的离线位置；也可保存在可信密码管理器中。拿到密钥的人可以恢复并重设口令。</p>
+      <code class="recovery-code">{{ security.recoveryReveal }}</code>
+      <button type="button" class="btn" @click="copyRecoveryKey">复制恢复密钥</button>
+      <label class="field"><span>输入恢复密钥末尾 6 位以确认已保存</span><input type="text" v-model="security.recoveryAck" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <button type="button" class="btn primary vault-action" :disabled="security.recoveryAck !== security.recoveryTail" @click="confirmRecoverySaved">我已妥善保存，继续使用</button>
+    </div>
+  </div>
 </div>
 
 <script src="vendor/vue.global.prod.js"></script>
@@ -613,6 +715,8 @@
 <script src="js/holiday.js"></script>
 <script src="js/calc.js"></script>
 <script src="js/savings.js"></script>
+<script src="js/secure.js"></script>
+<script src="js/evidence.js"></script>
 <script src="js/db.js"></script>
 <script src="js/app.js"></script>
 <script>

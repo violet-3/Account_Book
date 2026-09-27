@@ -1,5 +1,5 @@
 /* sw.js — 离线缓存:network-first(保证更新及时),离线时回退缓存 */
-const CACHE = 'wangcai-v13-saving-progress';
+const CACHE = 'wangcai-v15-evidence-vault';
 const ASSETS = [
   './',
   './index.html',
@@ -9,6 +9,8 @@ const ASSETS = [
   './js/holiday.js',
   './js/calc.js',
   './js/savings.js',
+  './js/secure.js',
+  './js/evidence.js',
   './js/db.js',
   './js/app.js',
   './vendor/vue.global.prod.js',

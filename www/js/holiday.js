@@ -3,7 +3,7 @@
  *
  * 策略:离线优先 + 在线增量
  * 1. 内置(data.js)已覆盖 2025–2026 年官方安排;
- * 2. 其他年份首次访问时,自动从 holiday-cn 开源数据仓库
+ * 2. 其他年份由用户主动选择后,从 holiday-cn 开源数据仓库
  *    (NateScarlet/holiday-cn,依据国务院办公厅通知逐年底更新)
  *    经 jsDelivr CDN 拉取,并缓存到 localStorage;
  * 3. 拉取失败(离线/未公布)时按周末规则推断,不影响使用。
@@ -98,16 +98,13 @@
     return 'unavailable';
   }
 
-  /* 应用启动:恢复缓存 → 注册更新回调 → 预取今年与明年(未内置的) */
+  /* 应用启动只恢复本地缓存；联网获取须由用户主动触发。 */
   function init(onUpdate) {
     const cache = loadCache();
     Object.keys(cache).forEach(y => {
       try { applyToGlobals(cache[y]); } catch { /* 单条缓存损坏则忽略 */ }
     });
     if (typeof onUpdate === 'function') st.listeners.push(onUpdate);
-    const nowY = new Date().getFullYear();
-    ensureYear(nowY);
-    ensureYear(nowY + 1);
   }
 
   root.HolidayUpdater = { init, ensureYear, status, parseHolidayCN };

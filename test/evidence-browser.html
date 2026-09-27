@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>旺财证据档案浏览器测试</title>
+<body><h1>证据档案浏览器测试</h1><pre id="result">运行中…</pre>
+<script src="../js/secure.js"></script><script src="../js/evidence.js"></script>
+<script>
+(async () => {
+  const output = document.getElementById('result');
+  const secure = window.WANGCAI_SECURE;
+  const evidence = window.WANGCAI_EVIDENCE;
+  const id = evidence.randomId();
+  try {
+    const state = { settings: {}, records: {}, savings: { goals: [], deposits: [] }, evidence: { events: [] } };
+    const created = await secure.createVault(state, '只用于自动化测试的合成口令-2026');
+    const original = new TextEncoder().encode('这是合成工作材料，不包含用户数据');
+    const sealed = await secure.sealAttachment(original, created.dataKey, id);
+    await evidence.putAttachment(id, sealed);
+    const event = await evidence.makeEvent(state.evidence.events, {
+      kind: 'attachment', source: 'self', title: '合成材料',
+      file: { id, name: 'sample.txt', mime: 'text/plain', size: original.length,
+        sha256: await evidence.sha256(original), lastModified: null },
+    });
+    state.evidence.events.push(event);
+    const backup = await evidence.encryptedBackup(created.vault, state.evidence.events, created.dataKey);
+    const opened = await secure.openVault(backup.vault, '只用于自动化测试的合成口令-2026');
+    opened.state.evidence = state.evidence;
+    await evidence.restoreAttachments(backup, opened);
+    const restored = await evidence.readOriginal(event, opened.dataKey);
+    if (new TextDecoder().decode(restored) !== new TextDecoder().decode(original)) throw Error('恢复的附件不同');
+    const archive = await evidence.evidencePackage(state, created.dataKey, [['月份', '估算'], ['2026-09', 1]]);
+    if (archive.size < 1000) throw Error('ZIP 内容不完整');
+    output.textContent = 'PASS：浏览器 Web Crypto、IndexedDB、加密备份恢复与证据 ZIP，均使用合成数据。';
+  } catch (error) { output.textContent = 'FAIL：' + error.message; }
+  finally { try { await evidence.deleteAttachment(id); } catch { /* 测试失败时无残留附件可清理 */ } }
+})();
+</script></body></html>

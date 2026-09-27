@@ -20,7 +20,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node test/calc.test.mjs && node test/holiday.test.mjs && node test/savings.test.mjs",
+    "test": "node test/calc.test.mjs && node test/holiday.test.mjs && node test/savings.test.mjs && node test/secure.test.mjs && node test/evidence.test.mjs",
     "lint": "eslint .",
     "bench": "node test/bench.mjs",
     "mobile:sync": "npx cap sync",

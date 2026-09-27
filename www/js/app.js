@@ -22,12 +22,176 @@
   updateViewport();
 
   /* ---------- 状态 ---------- */
-  const state = reactive(DB.loadState());
+  const SECURE = globalThis.WANGCAI_SECURE;
+  const EVIDENCE = globalThis.WANGCAI_EVIDENCE;
+  const state = reactive(DB.defaults());
+  let initialHasRecovery = false;
+  try { initialHasRecovery = DB.inspect() === 'unlock' && !!DB.readVault()?.recovery; } catch { /* 损坏密文仍需允许走导入恢复界面 */ }
+  const security = reactive({ mode: DB.inspect(), passphrase: '', confirmation: '', error: '',
+    busy: false, saveStatus: '', importing: false, importText: '', backupPassphrase: '',
+    unlockMethod: 'password', recoveryReveal: '', recoveryTail: '', recoveryAck: '', hasRecovery: initialHasRecovery,
+    newPassphrase: '', newConfirmation: '', backupMethod: 'password' });
+  let activeVault = null;
+  let dataKey = null;
+  let saveTail = Promise.resolve();
+  let saveRevision = 0;
+  let savedRevision = 0;
+  let suppressSave = false;
   const hver = ref(0); // 节假日数据版本:在线拉取到新年份后自增,驱动依赖日历的 computed 重算
   const storageOk = ref(DB.storage.ok);
-  watch(state, () => {
-    if (!DB.saveState(state)) storageOk.value = false;
-  }, { deep: true });
+  function replaceState(data) {
+    const normalized = DB.normalizeState(data);
+    Object.keys(state).forEach(key => { if (!(key in normalized)) delete state[key]; });
+    Object.assign(state, normalized);
+  }
+  function scheduleSave() {
+    if (suppressSave || security.mode !== 'unlocked' || !dataKey || !activeVault) return;
+    const revision = ++saveRevision;
+    security.saveStatus = '正在加密保存…';
+    saveTail = saveTail.catch(() => {}).then(async () => {
+      if (revision !== saveRevision) return;
+      const next = await SECURE.sealState(state, dataKey, activeVault);
+      if (revision !== saveRevision) return;
+      DB.writeVault(next);
+      activeVault = next;
+      savedRevision = revision;
+      security.saveStatus = '已加密保存';
+      storageOk.value = true;
+    });
+    saveTail.catch(error => {
+      if (revision === saveRevision) {
+        security.saveStatus = `保存失败：${error.message}`;
+        storageOk.value = false;
+      }
+    });
+  }
+  watch(state, scheduleSave, { deep: true, flush: 'sync' });
+  async function flushSave() {
+    await saveTail;
+    if (saveRevision !== savedRevision) throw new Error('最新修改尚未保存，请稍后重试');
+  }
+  window.addEventListener('beforeunload', event => {
+    if (security.mode === 'unlocked' && saveRevision !== savedRevision) event.preventDefault();
+  });
+  async function finishUnlock(opened) {
+    suppressSave = true;
+    activeVault = opened.vault;
+    dataKey = opened.dataKey;
+    security.hasRecovery = !!opened.vault.recovery;
+    replaceState(opened.state);
+    security.passphrase = '';
+    security.confirmation = '';
+    security.backupPassphrase = '';
+    security.importText = '';
+    security.importing = false;
+    security.error = '';
+    security.saveStatus = '已加密保存';
+    security.mode = 'unlocked';
+    await nextTick();
+    suppressSave = false;
+    saveRevision = 0;
+    savedRevision = 0;
+    loadDraft(todayStr, false);
+  }
+  function revealRecoveryKey(key) {
+    security.recoveryReveal = key;
+    security.recoveryTail = key.slice(-6);
+    security.recoveryAck = '';
+  }
+  async function setupEncryption() {
+    if (security.busy) return;
+    const mode = security.mode;
+    const passphrase = security.passphrase;
+    if (!['setup', 'migrate'].includes(mode)) return;
+    if (Array.from(passphrase).length < 12) { security.error = '解锁口令至少 12 个字符，请使用较长的独立短语'; return; }
+    if (passphrase !== security.confirmation) { security.error = '两次输入的口令不一致'; return; }
+    security.busy = true; security.error = '';
+    try {
+      const initial = mode === 'migrate' ? DB.readLegacy() : DB.defaults();
+      const created = await SECURE.createVault(initial, passphrase);
+      DB.writeVault(created.vault);
+      const verified = await SECURE.openVault(DB.readVault(), passphrase);
+      if (mode === 'migrate') DB.removeLegacy();
+      await finishUnlock(verified);
+      revealRecoveryKey(created.recoveryKey);
+    } catch (error) { security.error = `加密未完成：${error.message}。旧数据不会被清空。`; }
+    finally { security.busy = false; }
+  }
+  async function unlockVault() {
+    if (security.busy || security.mode !== 'unlock') return;
+    security.busy = true; security.error = '';
+    try {
+      let opened;
+      if (security.unlockMethod === 'recovery') {
+        opened = await SECURE.openVaultWithRecovery(DB.readVault(), security.passphrase);
+        if (security.newPassphrase !== security.newConfirmation) throw new Error('两次输入的新口令不一致');
+        const reset = await SECURE.resetPassphrase(opened.vault, opened.dataKey, security.newPassphrase);
+        DB.writeVault(reset.vault);
+        opened.vault = reset.vault;
+        await finishUnlock(opened);
+        revealRecoveryKey(reset.recoveryKey);
+      } else {
+        await finishUnlock(await SECURE.openVault(DB.readVault(), security.passphrase));
+      }
+    }
+    catch (error) { security.error = error.message; security.passphrase = ''; }
+    finally { security.busy = false; security.newPassphrase = ''; security.newConfirmation = ''; }
+  }
+  async function createRecoveryKey() {
+    if (security.busy || security.mode !== 'unlocked' || !dataKey || !activeVault) return;
+    if (security.hasRecovery && !confirm('更换后旧恢复密钥将立即失效。请确认你能妥善保存即将生成的新密钥。继续？')) return;
+    security.busy = true;
+    let savingPaused = false;
+    try {
+      await flushSave();
+      suppressSave = true;
+      savingPaused = true;
+      const created = await SECURE.addRecoveryKey(activeVault, dataKey);
+      DB.writeVault(created.vault);
+      activeVault = created.vault;
+      security.hasRecovery = true;
+      revealRecoveryKey(created.recoveryKey);
+      security.saveStatus = '恢复密钥已加密保存';
+    } catch (error) { alert(`生成恢复密钥失败：${error.message}`); }
+    finally {
+      if (savingPaused) { suppressSave = false; scheduleSave(); }
+      security.busy = false;
+    }
+  }
+  async function confirmRecoverySaved() {
+    if (!security.recoveryReveal || security.recoveryAck !== security.recoveryTail) return;
+    security.recoveryReveal = '';
+    security.recoveryTail = '';
+    security.recoveryAck = '';
+    showToast('恢复密钥已确认，请妥善保管');
+  }
+  async function copyRecoveryKey() {
+    try { await navigator.clipboard.writeText(security.recoveryReveal); showToast('已复制恢复密钥'); }
+    catch { alert('无法自动复制，请长按选中恢复密钥并手动复制'); }
+  }
+  async function lockVault() {
+    try { await evidenceTail; await flushSave(); }
+    catch (error) { alert(`当前修改尚未安全保存，暂不能锁定：${error.message}`); return; }
+    suppressSave = true;
+    dataKey = null;
+    activeVault = null;
+    replaceState(DB.defaults());
+    page.value = 'today';
+    loadDraft(todayStr, false);
+    draft.note = '';
+    goalDraft.open = false; goalDraft.editId = ''; goalDraft.name = '';
+    depDraft.open = false; depDraft.note = '';
+    choicePicker.open = false; timePicker.open = false;
+    security.passphrase = ''; security.confirmation = ''; security.error = '';
+    security.newPassphrase = ''; security.newConfirmation = ''; security.recoveryReveal = '';
+    security.unlockMethod = 'password';
+    evidenceFile.value = null;
+    evidenceDraft.title = ''; evidenceDraft.note = '';
+    security.mode = 'unlock';
+    security.saveStatus = '';
+    await nextTick();
+    suppressSave = false;
+  }
 
   /* 生效设置:合并社保基数模式与排班 */
   const effSettings = computed(() => {
@@ -105,25 +269,141 @@
     draft.note = (rec && rec.note) || '';
   }
 
-  function saveDraft() {
-    state.records[draft.date] = {
+  let evidenceTail = Promise.resolve();
+  async function recordAttendance(kind, date, after) {
+    evidenceTail = evidenceTail.catch(() => {}).then(async () => {
+      const before = state.records[date] || null;
+      if (kind === 'attendance_delete' && !before) return;
+      const event = await EVIDENCE.makeEvent(state.evidence.events, {
+        kind, workDate: date, source: 'self', title: kind === 'attendance_delete' ? '删除本人打卡' : '保存本人打卡',
+        before, after,
+      });
+      if (after) state.records[date] = after;
+      else delete state.records[date];
+      state.evidence.events.push(event);
+      await flushSave();
+    });
+    return evidenceTail;
+  }
+  async function saveDraft() {
+    const date = draft.date;
+    const after = {
       status: draft.status,
       ot: draft.ot > 0 ? draft.ot : 0,
       otType: draft.otType === 'auto' ? '' : draft.otType,
       note: draft.note || '',
     };
-    draft.open = false;
-    if (draft.date === todayStr) loadDraft(todayStr, false); // 刷新今日常驻面板
-    showToast(draft.date === todayStr ? '今日记录已保存' : '记录已保存');
+    try {
+      await recordAttendance('attendance_save', date, after);
+      draft.open = false;
+      if (date === todayStr) loadDraft(todayStr, false);
+      showToast(date === todayStr ? '今日记录与留痕已保存' : '记录与留痕已保存');
+    } catch (error) { alert(`打卡保存失败：${error.message}`); }
   }
 
-  function clearDraft() {
-    delete state.records[draft.date];
-    draft.open = false;
-    showToast('已清除该日记录');
+  async function clearDraft() {
+    try {
+      await recordAttendance('attendance_delete', draft.date, null);
+      draft.open = false;
+      showToast('打卡已清除，修改留痕仍保留');
+    } catch (error) { alert(`清除打卡失败：${error.message}`); }
   }
 
   const todayStr = C.fmtDate(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+  const evidenceDraft = reactive({ source: 'employer', workDate: todayStr, title: '', note: '' });
+  const evidenceFile = ref(null);
+  const evidenceBusy = ref(false);
+  const evidenceStatus = ref('');
+  const evidenceEvents = computed(() => [...state.evidence.events].reverse());
+  const evidenceFileCount = computed(() => state.evidence.events.filter(event => event.file).length);
+  function chooseEvidenceFile(event) {
+    evidenceFile.value = event.target.files?.[0] || null;
+    event.target.value = '';
+  }
+  async function saveEvidenceFile() {
+    const file = evidenceFile.value;
+    if (evidenceBusy.value || !file) { evidenceStatus.value = '请先选择一个原始文件'; return; }
+    if (!file.size || file.size > EVIDENCE.MAX_FILE_BYTES) {
+      evidenceStatus.value = '请选择不超过 20 MB 的非空文件'; return;
+    }
+    evidenceBusy.value = true;
+    evidenceStatus.value = '正在加密保存原始文件…';
+    const details = { source: evidenceDraft.source, workDate: evidenceDraft.workDate,
+      title: evidenceDraft.title.trim() || file.name, note: evidenceDraft.note.trim() };
+    evidenceTail = evidenceTail.catch(() => {}).then(async () => {
+      const id = EVIDENCE.randomId();
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let stored = false;
+      try {
+        const sha256 = await EVIDENCE.sha256(bytes);
+        const encrypted = await SECURE.sealAttachment(bytes, dataKey, id);
+        const fileMeta = { id, name: file.name, mime: file.type || 'application/octet-stream',
+          size: file.size, sha256, lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : null };
+        await EVIDENCE.putAttachment(id, encrypted);
+        stored = true;
+        const entry = await EVIDENCE.makeEvent(state.evidence.events,
+          { kind: 'attachment', ...details, file: fileMeta });
+        state.evidence.events.push(entry);
+        try { await flushSave(); }
+        catch (error) { state.evidence.events.pop(); throw error; }
+      } catch (error) {
+        if (stored) await EVIDENCE.deleteAttachment(id);
+        throw error;
+      } finally { bytes.fill(0); }
+    });
+    try {
+      await evidenceTail;
+      evidenceFile.value = null;
+      evidenceDraft.title = ''; evidenceDraft.note = '';
+      evidenceStatus.value = '原件已加密保存，并加入时间线';
+    } catch (error) { evidenceStatus.value = `保存失败：${error.message}`; }
+    finally { evidenceBusy.value = false; }
+  }
+  async function downloadEvidenceFile(event) {
+    if (!confirm('原始文件会以明文保存到下载目录。继续吗？')) return;
+    try {
+      const bytes = await EVIDENCE.readOriginal(event, dataKey);
+      const blob = new Blob([bytes], { type: event.file.mime });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a'); anchor.href = url;
+      anchor.download = event.file.name.replace(/[\\/]/g, '_'); anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { alert(`原件读取失败：${error.message}`); }
+  }
+  async function exportEvidencePackage() {
+    if (!confirm('证据包包含明文原件、打卡记录和工资估算。请确认下载设备与分享对象可信。继续导出吗？')) return;
+    evidenceBusy.value = true; evidenceStatus.value = '正在核对附件并制作证据包…';
+    try {
+      await evidenceTail; await flushSave();
+      const years = [...new Set(Object.keys(state.records).map(date => Number(date.slice(0, 4))))]
+        .filter(Number.isInteger).sort((a, b) => a - b);
+      const wages = [['月份', '基本工资估算', '补贴估算', '加班费估算', '缺勤扣款估算', '五险一金估算', '个税估算', '预计实发', '说明']];
+      for (const year of years) {
+        const result = C.calcYear(year, effSettings.value, state.records, H);
+        result.months.filter(month => month.recorded).forEach(month => wages.push([
+          month.label, month.gross - month.allowance - month.otPay + month.deduction,
+          month.allowance, month.otPay, month.deduction, month.social.total, month.tax, month.net,
+          '按当前设置计算的估算值，不是实际工资凭证',
+        ]));
+      }
+      const zip = await EVIDENCE.evidencePackage(state, dataKey, wages);
+      const url = URL.createObjectURL(zip);
+      const anchor = document.createElement('a'); anchor.href = url;
+      anchor.download = `旺财工作证据包-${todayStr}.zip`; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      evidenceStatus.value = '证据包已生成；其中的记录和设备时间仍需与外部材料相互印证';
+    } catch (error) { evidenceStatus.value = `导出失败：${error.message}`; }
+    finally { evidenceBusy.value = false; }
+  }
+  async function copyEvidenceDigest() {
+    try {
+      await evidenceTail; await flushSave();
+      const digest = await EVIDENCE.verifyEvents(state.evidence.events);
+      if (!state.evidence.events.length) { evidenceStatus.value = '暂无留痕，尚无可提交的校验值'; return; }
+      await navigator.clipboard.writeText(digest);
+      evidenceStatus.value = '已复制时间线校验值；如需独立时间证明，可自行提交给可信存证服务。校验值本身不证明打卡真实。';
+    } catch (error) { evidenceStatus.value = `复制失败：${error.message}`; }
+  }
   const todayRec = computed(() => state.records[todayStr] || null);
   const todayKind = computed(() => { hver.value; return C.dayKind(todayStr, H); });
   const todayKindLabel = computed(() => {
@@ -228,9 +508,16 @@
     hver.value;
     const st = globalThis.HolidayUpdater ? globalThis.HolidayUpdater.status(calYear.value) : 'ok';
     if (st === 'loading') return `${calYear.value} 年节假日数据获取中…`;
-    if (!H[calYear.value]) return `${calYear.value} 年节假日安排暂未获取(未公布或离线),按周末规则推断`;
+    if (!H[calYear.value]) return `${calYear.value} 年节假日安排未保存在本机，暂按周末规则推断`;
     return '';
   });
+  async function refreshHolidayData() {
+    if (!globalThis.HolidayUpdater) return;
+    if (!confirm(`将联网获取 ${calYear.value} 年节假日安排。只发送年份请求，不上传账本数据。继续？`)) return;
+    const result = await globalThis.HolidayUpdater.ensureYear(calYear.value);
+    hver.value++;
+    showToast(result === 'ok' ? '节假日数据已更新' : '暂未取得节假日数据，可稍后再试');
+  }
   function calShift(delta) {
     let m = calMonth.value + delta, y = calYear.value;
     if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; }
@@ -501,22 +788,28 @@
     showToast('已删除自定义险种');
   }
 
-  function doExport() {
-    const blob = new Blob([DB.exportJSON(state)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `打工账本备份-${todayStr}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    showToast('已导出备份文件');
+  async function doExport() {
+    try {
+      await evidenceTail; await flushSave();
+      const backup = await EVIDENCE.encryptedBackup(DB.readVault(), state.evidence.events, dataKey);
+      const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `旺财加密备份-${todayStr}.wangcai`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      showToast('账本和证据附件已加密备份，请妥善保管口令');
+    } catch (error) { alert(`备份失败：${error.message}`); }
   }
   function doExportCSV() {
+    if (!confirm('CSV 表格是明文，其他能访问该文件的人可能看到记录。仍要导出吗？')) return;
     const blob = new Blob([DB.exportCSV(state, globalThis.HOLIDAY_NAMES)], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `打工账本数据-${todayStr}.csv`; a.click(); URL.revokeObjectURL(a.href);
     showToast('已导出 Excel 兼容表格');
   }
   function doExportXLSX() {
+    if (!confirm('XLSX 表格是明文，其他能访问该文件的人可能看到记录。仍要导出吗？')) return;
     const xlsx = globalThis.XLSX;
     if (!xlsx) { showToast('Excel 模块尚未加载,请稍后重试'); return; }
     const wb = xlsx.utils.book_new();
@@ -556,7 +849,7 @@
     if (!file) return;
     if (!globalThis.XLSX) { alert('Excel 模块尚未加载'); return; }
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const xlsx = globalThis.XLSX;
         const book = xlsx.read(reader.result, { type: 'array', cellDates: true });
@@ -583,55 +876,110 @@
           }
         });
         if (!confirm(`将导入 ${Object.keys(records).length} 条考勤记录和 ${deposits.length} 笔储蓄记录，并覆盖现有记录。继续?`)) return;
+        await evidenceTail;
+        const importEvent = await EVIDENCE.makeEvent(state.evidence.events, { kind: 'attendance_import',
+          source: 'self', title: '导入表格覆盖考勤', note: `${Object.keys(records).length} 条考勤；源文件：${file.name}` });
         state.records = records;
+        state.evidence.events.push(importEvent);
         if (deposits.length) state.savings.deposits = deposits;
         Object.assign(state.settings, importedSettings);
         if (importedItems.length) state.settings.insuranceItems = importedItems;
         state.settings.insuranceItems.forEach(item => { if (item.id === 'pension') state.settings.pensionRate = item.rate; if (item.id === 'medical') state.settings.medicalRate = item.rate; if (item.id === 'unemployment') state.settings.unemploymentRate = item.rate; if (item.id === 'housing') state.settings.housingRate = item.rate; });
-        showToast('表格导入成功');
+        await flushSave();
+        showToast('表格导入成功，操作已留痕');
       } catch (e) { alert(`表格导入失败:${e.message}`); }
     };
     reader.readAsArrayBuffer(file);
   }
-  function onImportFile(ev) {
+  async function onImportFile(ev) {
     const file = ev.target.files && ev.target.files[0];
     ev.target.value = '';
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const { records, settings } = DB.importJSON(reader.result);
-        if (!confirm(`将导入 ${Object.keys(records).length} 条日期记录,并覆盖当前设置。继续?`)) return;
-        state.records = records;
-        Object.assign(state.settings, settings);
-        const imported = DB.importJSON(reader.result);
-        if (imported.savings) state.savings = imported.savings;
-        showToast('导入成功');
-      } catch (e) {
-        alert('导入失败:' + e.message);
+    try {
+      const contents = await file.text();
+      const parsed = JSON.parse(contents);
+      if (parsed?.format === SECURE.FORMAT || parsed?.format === 'wangcai-backup') {
+        EVIDENCE.parseBackup(parsed);
+        security.importText = contents;
+        security.backupPassphrase = '';
+        security.backupMethod = 'password';
+        security.newPassphrase = ''; security.newConfirmation = '';
+        security.error = '';
+        security.importing = true;
+        return;
       }
-    };
-    reader.readAsText(file, 'utf-8');
+      if (security.mode !== 'unlocked') throw new Error('请先开启加密或解锁，再导入旧版明文 JSON 备份');
+      const imported = DB.importJSON(contents);
+      if (!confirm(`这是旧版明文备份。将用当前密钥加密导入，并覆盖现有 ${Object.keys(state.records).length} 条考勤记录。继续？`)) return;
+      await evidenceTail;
+      const importEvent = await EVIDENCE.makeEvent(state.evidence.events, { kind: 'attendance_import',
+        source: 'self', title: '导入旧版 JSON 覆盖考勤', note: `${Object.keys(imported.records).length} 条考勤；源文件：${file.name}` });
+      replaceState({ ...state, settings: imported.settings, records: imported.records, savings: imported.savings });
+      state.evidence.events.push(importEvent);
+      await flushSave();
+      showToast('旧版备份已加密导入，请删除外部明文文件');
+    } catch (error) { alert(`导入失败：${error.message}`); }
   }
-  function doClear() {
+  function cancelBackupImport() {
+    security.importing = false;
+    security.importText = '';
+    security.backupPassphrase = '';
+    security.newPassphrase = ''; security.newConfirmation = '';
+  }
+  async function confirmBackupImport() {
+    if (security.busy || !security.importText) return;
+    security.busy = true; security.error = '';
+    try {
+      const backup = EVIDENCE.parseBackup(security.importText);
+      const credential = security.backupPassphrase;
+      const opened = security.backupMethod === 'recovery'
+        ? await SECURE.openVaultWithRecovery(backup.vault, credential)
+        : await SECURE.openVault(backup.vault, credential);
+      let reset = null;
+      if (security.backupMethod === 'recovery') {
+        if (security.newPassphrase !== security.newConfirmation) throw new Error('两次输入的新口令不一致');
+        reset = await SECURE.resetPassphrase(opened.vault, opened.dataKey, security.newPassphrase);
+        opened.vault = reset.vault;
+      }
+      if (!confirm('将用此加密备份覆盖本机账本。此操作不可撤销，建议先保存当前加密备份。继续？')) return;
+      if (security.mode === 'unlocked') { await evidenceTail; await flushSave(); }
+      const verified = security.backupMethod === 'recovery'
+        ? await SECURE.openVaultWithRecovery(opened.vault, reset.recoveryKey)
+        : await SECURE.openVault(opened.vault, credential);
+      await EVIDENCE.restoreAttachments(backup, verified);
+      DB.writeVault(opened.vault);
+      if (localStorage.getItem(DB.KEY) !== null) DB.removeLegacy();
+      await finishUnlock(verified);
+      if (reset) revealRecoveryKey(reset.recoveryKey);
+      showToast('加密备份已恢复');
+    } catch (error) { security.error = error.message; }
+    finally { security.busy = false; security.newPassphrase = ''; security.newConfirmation = ''; }
+  }
+  async function doClear() {
     if (!confirm('确定清空所有考勤记录吗?此操作不可恢复(建议先导出备份)。')) return;
-    state.records = {};
-    showToast('已清空全部记录');
+    try {
+      await evidenceTail;
+      const count = Object.keys(state.records).length;
+      const event = await EVIDENCE.makeEvent(state.evidence.events, { kind: 'attendance_bulk_delete',
+        source: 'self', title: '清空考勤记录', note: `清空前共 ${count} 条；原始附件和历史留痕仍保留` });
+      state.records = {};
+      state.evidence.events.push(event);
+      await flushSave();
+      showToast('考勤已清空，操作留痕仍保留');
+    } catch (error) { alert(`清空失败：${error.message}`); }
   }
 
   /* ---------- 挂载 ---------- */
   createApp({
     setup() {
-      loadDraft(todayStr, false); // 今日页常驻草稿(须在 setup 上下文中初始化)
+      if (security.mode === 'unavailable') security.error = '本地存储不可用，已停止进入账本，避免产生无法保存的记录';
       // 节假日数据自动更新:切到新年份时按需在线拉取,完成后 hver 自增触发重算
       if (globalThis.HolidayUpdater) {
         globalThis.HolidayUpdater.init(() => { hver.value++; });
-        watch([calYear, payYear], (years) => {
-          years.forEach(y => globalThis.HolidayUpdater.ensureYear(y));
-        });
       }
       return {
-        state, page, toast, showToast, storageOk,
+        state, page, toast, showToast, storageOk, security, setupEncryption, unlockVault, lockVault, createRecoveryKey, confirmRecoverySaved, copyRecoveryKey,
+        confirmBackupImport, cancelBackupImport,
         effSettings, applyCity, schedule, cityName,
         STATUS_META, OT_TYPE_LABEL, WEEKDAYS, fmtMoney,
         draft, loadDraft, saveDraft, clearDraft, inferredOtType,
@@ -642,12 +990,14 @@
         GOAL_TEMPLATES, savYear, goalCards, expandedGoal,
         goalDraft, openGoalEditor, applyTemplate, saveGoal, deleteGoal,
         depDraft, openDeposit, saveDeposit, deleteDeposit,
-        calYear, calMonth, calCells, calStat, calHasRecords, calOtPay, calShift, calYearHint, calTimeoff,
+        calYear, calMonth, calCells, calStat, calHasRecords, calOtPay, calShift, calYearHint, calTimeoff, refreshHolidayData,
         payYear, payMonth, pay, payRecordedDays, hasYearRecords, chartData, chartMax, payShift, percentStr,
         cityList, choicePicker, choiceOptions, choiceValue, optionLabel, openChoicePicker, selectChoice,
         hourOptions, minuteOptions, timePicker, hourWheel, minuteWheel, openTimePicker, syncWheelValue, chooseWheelValue, saveTimePicker,
         housingPct, insuranceSummary, insuranceTitle, socialDeductionInfo, socialBaseInfo, isCompanyOnlyInsurance, setHousingEnabled, setInsuranceRate, addInsurance, removeInsurance,
         doExport, doExportCSV, doExportXLSX, onImportFile, onImportSpreadsheetFile, doClear,
+        evidenceDraft, evidenceFile, evidenceBusy, evidenceStatus, evidenceEvents, evidenceFileCount,
+        evidenceSources: EVIDENCE.SOURCES, chooseEvidenceFile, saveEvidenceFile, downloadEvidenceFile, exportEvidencePackage, copyEvidenceDigest,
       };
     },
   }).mount('#app');

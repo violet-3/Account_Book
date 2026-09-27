@@ -1,7 +1,7 @@
-# 打工人账本 · Dagong Ledger
+# 旺财 · 记工、工资与攒钱
 
-> 考勤 + 加班 + 工资估算,数据存在自己设备里的记账本。
-> Local-first attendance & overtime tracking with payroll estimation — works on phone, tablet and desktop.
+> 通过记录、规划和留痕，让打工生活更有底气。考勤、工资估算、攒钱目标与工作材料都在本机管理。
+> A local-first work and money companion for attendance, pay estimates, savings goals, and work records.
 
 [![CI](https://github.com/violet-3/Account_Book/actions/workflows/ci.yml/badge.svg)](https://github.com/violet-3/Account_Book/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-v1.3.0-4f46e5)](../../releases)
@@ -10,14 +10,16 @@
 ![Node](https://img.shields.io/badge/node-%E2%89%A518-brightgreen)
 
 <p align="center">
-  <img src="docs/demo.gif" alt="打工人账本演示 demo" width="320">
+  <img src="docs/demo.gif" alt="旺财手机界面演示：今日、日历、工资、攒钱与工作证据档案，均为演示数据" width="320">
+  <br>
+  <sub>新版手机界面演示 · 使用虚构数据</sub>
 </p>
 
 ## Quick Start 快速开始
 
-1. **Run / 运行**:`node server.js` → open <http://localhost:5173> (零依赖,无需 npm install / zero-dependency)
+1. **Run / 运行**:`node server.js` → open <http://localhost:5173> (网页运行无需安装依赖 / no app dependencies required)
 2. **Deploy / 部署**:把文件夹丢到任意静态托管(GitHub Pages / Vercel / Netlify),或 `docker run -p 5173:5173` 本地容器
-3. **Install / 安装**:手机浏览器打开 → 「添加到主屏幕」,像原生 App 一样离线使用 / Add to Home Screen for offline use
+3. **Install / 安装**:手机浏览器打开 → 「添加到主屏幕」离线使用；也可用 `android/` 与 `ios/` 原生工程构建客户端 / Install as a PWA or build the native client
 
 ---
 
@@ -46,15 +48,15 @@
 - **今日打卡**:出勤状态(出勤 / 休息 / 带薪假 / 无薪假 / 病假 / 旷工)+ 加班时长一键记录;显示在岗状态与下班倒计时;自动识别工作日、周末、法定节假日、调休日,自动匹配 1.5× / 2× / 3× 加班倍率
 - **排班制度**:双休 / 单休 / **大小周**(指定本周类型后按周自动交替推算),上下班时间可配,同步影响应出勤、缺勤判定与加班倍率
 - **专业排班**:医护、工厂、客服等可配置“连续上班 N 天 + 连续休息 M 天”轮班周期;销售、外勤等可使用按实际记录的弹性排班
-- **出勤日历**:月视图状态着色 + 加班角标,点任意日期弹层编辑;节假日数据**按年自动更新**(内置 2025–2026,其他年份自动在线获取并缓存,离线优雅降级)
+- **出勤日历**:月视图状态着色 + 加班角标,点任意日期弹层编辑;内置 2025–2026 节假日安排，其他年份由用户主动联网获取并缓存，离线时继续使用周末规则
 - **工资估算**:加班费(倍率可改)、缺勤扣款、五险一金(内置 16 城个人比例与基数上下限,可改)、个税**累计预扣预缴法**(5000 起征,支持专项附加扣除),工资条式明细 + 全年实发走势图
 - **五险一金解耦**:养老、医疗、失业、公积金可分别启用和调整比例,还可添加任意自定义险种
 - **加班补偿**:加班费 / **调休折算**(累计可休时长) / 仅记录,三种模式
 - **攒钱规划**:储蓄目标(旅行、恋爱基金、应急备用金、买房首付等 12 个模板)+ 存款流水 + 本月进度 + 年度储蓄预估(计划口径与实际速度双口径),预计达成年月一目了然
 - **工作证据档案**:打卡修改留痕，原始材料加密存本机；可导出包含原件、校验清单、打卡与工资估算的 ZIP。校验不等于第三方存证或工作事实证明。
-- **数据自主**:账本和证据原件在本机加密保存,不注册不上传；`.wangcai` 加密备份包含附件，CSV/XLSX 不包含附件
+- **本机加密与备份**:首次使用设置解锁口令，账本和证据原件加密后保存在本机；`.wangcai` 加密备份包含附件。恢复密钥由用户自行保管，CSV/XLSX 是不加密的表格文件
 - **三端适配**:手机 / 平板 / 桌面响应式布局,深色模式跟随系统
-- **Excel 兼容导出**:可在设置中导出 UTF-8 CSV,使用 Excel 直接打开或另存为 `.xlsx`
+- **表格导入导出**:支持多工作表 `.xlsx` 与 UTF-8 CSV 导出，也可导入表格恢复考勤和储蓄记录；表格文件为明文，不含证据原件
 
 ## 性能 Performance
 
@@ -91,9 +93,11 @@ npm run mobile:ios # 打开 Xcode(macOS)
 index.html          页面与 Vue 模板
 css/style.css       样式(移动优先,三档断点,深色模式)
 js/data.js          城市五险一金参数 + 内置节假日(2025–2026)
-js/holiday.js       节假日按年自动更新(holiday-cn + jsDelivr + 本地缓存)
+js/holiday.js       节假日内置表、本地缓存与用户主动更新
 js/calc.js          计算引擎(加班费/社保/个税,纯函数)
-js/db.js            localStorage 持久层 + JSON 导入导出
+js/db.js            加密账本存储、旧数据迁移与表格导入导出
+js/secure.js        本机账本与附件加密、恢复密钥
+js/evidence.js      工作证据时间线、附件备份与 ZIP 导出
 js/app.js           Vue 3 应用逻辑
 server.js           零依赖静态服务器(支持 PORT 环境变量)
 sw.js               PWA 离线缓存(network-first)
